@@ -509,8 +509,9 @@ Rules:
 
 - Changing a module **transitions**. It does not rebuild the tree.
 - **Place is restored on return** (§2.5).
-- **Collapse is one decision, shared.** Below a threshold the rack and the deck stack, and
-  every part reads the same answer so they can never disagree about whether there is room.
+- **Collapse is one decision, shared.** Below a threshold the frame becomes **paged** rather
+  than stacked (§7.1), and every part reads the same answer so they can never disagree about
+  whether there is room.
 
   "One decision" is easy to write and impossible to honor naively, because a media query in
   CSS and a `matchMedia` in JavaScript are already two numbers that can drift. What it costs
@@ -529,6 +530,57 @@ Rules:
 - **A collapsed region is inert**, not merely hidden. Someone moving through by keyboard must
   never land inside a panel they cannot see.
 - **A glyph-only control keeps its name.** The visible label goes; the accessible name does not.
+
+### 7.1 Narrow is paged, not stacked
+
+**Stacking the four regions into one long scroll is not a small-screen design.** It is a wide
+layout reflowing, and it fails the same way every time: the deck ends up three modules below
+the fold, so the person scrolls past everything they were tuning to see what it did, then has
+no way back. The causal link §2.3 exists to protect is exactly what a long scroll severs.
+
+A console does not scroll. It has **mode keys**, and pressing one changes the page. So below
+the threshold the frame keeps its crown and its ledger and gains a fifth fixed part:
+
+```
+┌────────────────────────────────────┐
+│ PLAYLIST.ME    ● demo · 268   ◐    │ ← the crown, unchanged
+├────────────────────────────────────┤
+│                                    │
+│   the one selected section,        │ ← scrolls within itself
+│   scrolling on its own             │
+│                                    │
+├────────────────────────────────────┤
+│ ┌──────┬───────┬───────┬────────┐  │ ← the keys: pinned, thumb-height
+│ │SOURCE│ BLOCK │ SHAPE │ ●DECK  │  │
+│ │   3  │  −68  │   25  │   25   │  │
+│ └──────┴───────┴───────┴────────┘  │
+├────────────────────────────────────┤
+│ ▸ 25 tracks · 2 hr 11   [SAVE ▸]   │ ← the ledger, unchanged
+└────────────────────────────────────┘
+```
+
+The rules that make it a device rather than a tab bar:
+
+- **The keys sit above the ledger, both pinned.** Bottom is thumb reach. The crown is
+  information, the keys are travel, the ledger is the way out — that order, always.
+- **The selected key is pressed in**, using the elevation system (§5), while the others stay
+  proud. Position is marked by _height_, not by colour, because **navigation never takes the
+  accent** (§3). A small amber lamp confirms it, because amber reports (§5 rule 4).
+- **Every key carries its own count**, and this is the part that earns the design. `BLOCK −68`
+  is legible while you are looking at the deck, so the causal link survives the section being
+  off-screen. A key that showed only a name would be a worse version of a scroll.
+- **Each section keeps its own scroll position**, restored on return, and **the selected
+  section survives a reload** (§2.5). Coming back to a recipe must not also mean finding your
+  place in it again.
+- **Unselected sections are inert** (§7), not merely off-screen.
+- **Swiping sideways moves between sections**, and the keys are its single-pointer
+  alternative (§13, 2.5.7). Swipe is an accelerant, never the only path (§2.13).
+- **Changing section transitions; it does not rebuild.** The crown, the keys and the ledger
+  never rebuild at all.
+
+Above the threshold all four regions are visible at once, which is strictly better, and the
+keys do not exist. This is the one place the two layouts genuinely differ in kind rather than
+in size.
 
 ---
 
