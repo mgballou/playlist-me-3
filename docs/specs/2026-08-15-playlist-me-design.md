@@ -103,10 +103,71 @@ Notes that matter:
 - **`track` with `expand`** reaches the album and the collaborating artists. Collaboration is
   the only artist-similarity signal left after `related-artists` was removed, and it is a
   genuinely good one — features and split releases encode real scene adjacency.
-- **`search`** is the workhorse. Spotify's query syntax still carries `genre:`, `year:`,
-  `artist:`, and the `tag:hipster` / `tag:new` modifiers. `Obscurity` maps onto `tag:hipster`
-  and is how "music I have not heard" gets requested at the API level.
-- **`newReleases`** is implemented as `tag:new` search, since the browse endpoint is gone.
+- **`search`** is the workhorse, and its filters do not all compose. See §2.2.1 — getting this
+  wrong is the most likely way to ship a source that silently returns nothing.
+- **`newReleases`** is implemented as a `tag:new` album search, since the browse endpoint is
+  gone.
+
+#### 2.2.0 The supporting unions, enumerated
+
+Named as types above and pinned here, because `packages/spotify` maps every one of them onto a
+request parameter and guessing differently would be a silent mismatch.
+
+| Union            | Members                                                           | Maps to                                        |
+| ---------------- | ----------------------------------------------------------------- | ---------------------------------------------- |
+| `CatalogDepth`   | `albums` · `albumsAndSingles` · `everything`                      | `include_groups` on `GET /artists/{id}/albums` |
+| `TrackExpansion` | `album` · `collaborators` · `both`                                | Which edges a `track` source walks             |
+| `Obscurity`      | `any` · `obscure`                                                 | Binary, because `tag:hipster` is               |
+| `TopRange`       | `shortTerm` · `mediumTerm` · `longTerm`                           | `time_range` on `GET /me/top/{type}`           |
+| `OrderStrategy`  | `shuffle` · `byRelease` · `artistClustered` · `sourceInterleaved` | Engine-only                                    |
+
+**`sourceIndex` is first-source-wins.** A track reachable from two sources is credited to the
+earlier one in `Recipe.sources`. Deduplication happens in the resolver, before the pool reaches
+the engine — so `packages/spotify` must dedupe by `TrackId` and must not emit the same track
+twice under different source indices.
+
+#### 2.2.1 What search filters actually allow
+
+The filters apply to different search types, and **the two we most want cannot be combined**:
+
+| Filter        | Applies to           |
+| ------------- | -------------------- |
+| `artist:`     | album, artist, track |
+| `album:`      | album, track         |
+| `track:`      | track                |
+| `year:`       | album, artist, track |
+| `genre:`      | **artist, track**    |
+| `tag:hipster` | **album only**       |
+| `tag:new`     | **album only**       |
+
+`genre:` is artist/track-scoped; `tag:hipster` is album-scoped. A single query cannot ask for
+"obscure dub". Resolution therefore branches on obscurity rather than building one query:
+
+- **Ordinary obscurity** → `type=track`, `q=<terms> genre:"…" year:a-b`. One request per page,
+  tracks come back directly.
+- **High obscurity** → `type=album`, `q=<terms> tag:hipster year:a-b` (no `genre:`), then
+  `GET /albums/{id}/tracks` per album. Genre coherence is recovered at scoring time from
+  `artist.genres` (§3.5) rather than at query time.
+
+**The genre word is not discarded on the album path — it becomes free text.** A `genre:` filter
+is unavailable there, so the term joins the query as ordinary search terms. That is a text
+match against names rather than a classification, so it behaves differently, and the difference
+is real enough to state rather than paper over.
+
+**`newReleases` hits the same collision.** `tag:new` is album-scoped and `genre:` is not, so its
+optional genre is also free text, not a filter.
+
+**Encode this in the types, not in a comment.** The client's `AlbumSearchQuery` carries `tag`
+and has **no `genre` field at all**; `TrackSearchQuery` carries `genre` and no `tag`. "Obscure
+dub" is then unrepresentable rather than silently empty, which is the only version of this rule
+that cannot be forgotten.
+
+The second path costs one request per album on top of the search, which is exactly the kind of
+thing the request budget in §5.2 exists to show the person before it spends it.
+
+`limit` is capped at 10 and `offset` at 1000, so a single search source can reach at most
+1,000 results across 100 requests. Pool building pages until it has enough or hits either
+ceiling, and reports which.
 
 ### 2.3 Exclusions — the reason the app exists
 
@@ -159,6 +220,19 @@ build({ pool, recipe, seed }) → BuildResult   PURE. no I/O, no clock, no ambie
 **`build` is a pure function.** No `Date.now()`, no `Math.random()`, no fetch — enforced by
 lint, not by good intentions. Time and seed enter as arguments at the boundary.
 
+**Where each half runs.** Resolving touches the network and holds the token, so it is a server
+action returning the pool, the `EngineContext` and the request cost. `build` runs in the
+browser over the pool already in hand, so re-roll, lock, reject and reorder cost nothing and
+never re-fetch (ui-sensibility §2.10). The `EngineContext` — library, top tracks, recent plays,
+follows — rides along with the pool for the same reason: fetching it lazily would make the
+dials expensive, and the dials are the most-touched controls in the app.
+
+**Re-resolving is keyed on the sources alone**, plus the playlist ids named by any `playlist`
+exclusion. Everything else is free. The exception is honest and unavoidable: adding a playlist
+exclusion names a list nobody has read yet, so it costs a resolve. There is no way to answer
+"never anything off Kids Jams" without reading Kids Jams, and the UI says so rather than
+hiding it.
+
 Three things fall out of that for free, which is why the rule is worth the discipline:
 
 1. Every engine test is a plain assertion against a fixture pool. No network, no mocks, no
@@ -173,13 +247,33 @@ Three things fall out of that for free, which is why the rule is worth the disci
 
 ```
 pool
-  → reject(exclusions)        drop anything excluded. §2.3
+  → reject(exclusions)        drop anything excluded, and anything rejected. §2.3
   → score(familiarity, depth) one weight per track. §3.5
-  → honorPins(locks, rejects) fixed slots first, banished tracks removed. §3.3
-  → select(target, maxPerArtist, seed)   weighted sample without replacement
-  → order(order, seed)        arrange the chosen set
+  → select(target, maxPerArtist, locks, seed)   weighted sample without replacement;
+                              locked tracks are guaranteed *membership* here
+  → order(strategy, seed)     permute the free tracks only
+  → placeLocks(locks)         locked tracks take their *positions* last. §3.2.1
   → BuildResult
 ```
+
+#### 3.2.1 Why locks are resolved in two places
+
+An earlier draft of this section put a single `honorPins` pass between `score` and `select`.
+That is not implementable, and the reason is worth writing down: **a lock carries a playlist
+index**, but `order` runs afterwards and would move it. Pinning before ordering cannot survive
+`byRelease`.
+
+So a lock is two guarantees, resolved at the two different moments each belongs to:
+
+- **Membership** is settled inside `select` — a locked track is in the chosen set regardless of
+  its weight, and it still counts against `maxPerArtist` and the target.
+- **Position** is applied after `order`, which permutes only the unlocked tracks around the
+  reserved indices.
+
+This is what makes "a locked track holds its exact index across re-rolls" true under every
+ordering strategy rather than only under `shuffle`. `select` and `order` also run off separate
+RNG streams derived from the one seed, so changing the ordering strategy cannot silently change
+which tracks were chosen.
 
 `BuildResult` carries the tracks **and** the reasoning: how many candidates each source
 contributed, what each exclusion removed, and whether the target was reachable. The UI shows
@@ -200,11 +294,29 @@ path, and therefore no second code path to get wrong.
 
 ### 3.4 Title heuristics are heuristics, and say so
 
-`liveOrRemix` matches against title patterns — `Live`, `Remix`, `Remaster`, `Karaoke`,
-`Instrumental`, `Radio Edit`, and their bracketed variants. This is a heuristic. It will miss a
-live album whose tracks are not marked, and it will catch a studio track named "Live and Let
-Die". The UI calls it "best effort" rather than implying certainty, and the pattern list lives
-in one exported constant so it is testable and correctable.
+`liveOrRemix` looks for `Live`, `Remix`, `Remaster`, `Karaoke`, `Instrumental` and `Radio Edit`
+— but **only in suffix position**: after a `-` separator, or inside parentheses or brackets.
+That is where Spotify's catalog actually puts them (`Song - Live at Budokan`, `Song (Radio
+Edit)`, `Song - 2011 Remaster`).
+
+Matching the bare word anywhere in the title is the obvious implementation and it is wrong. It
+throws away "Live and Let Die", "Live Forever", "Live Wire" and "Long Live" — studio tracks,
+silently removed, with no way for the person to work out why. A filter that quietly deletes
+correct results is worse than no filter.
+
+**The heuristic therefore under-catches rather than over-catches**, which is the right direction
+to fail. A missed live track is one odd entry in a playlist; a wrongly excluded studio track is
+a person wondering why a song they asked for never appears.
+
+It misses two things, and both are deliberate:
+
+- a live album whose tracks carry no marker in their titles at all — the dominant case
+- a title punctuated `Song -Live` or `Song-Live`, because the separator rule requires the
+  spaces Spotify itself uses
+
+The UI calls it "best effort" rather than implying certainty, and the vocabulary lives in one
+exported constant, separate from the segment-extraction rule, so adding a term later is one
+line.
 
 ### 3.5 Scoring without `popularity` or audio features
 
@@ -218,6 +330,20 @@ Both signals v2 relied on are gone. What remains, and what we do with it:
 | Appears in user's library / top / followed | user endpoints                  | **Familiarity**, directly and reliably                                               |
 | Artist catalog size                        | `GET /artists/{id}/albums`      | Weak obscurity proxy                                                                 |
 | `tag:hipster` membership                   | search-time                     | Obscurity, applied at fetch rather than at score                                     |
+
+#### 3.5.1 Genres are borrowed time
+
+`artist.genres` still returns, but Spotify marks it **deprecated** — the same notice
+`popularity` carried before it was removed. Coherence scoring therefore treats genres as a
+signal that may vanish:
+
+- An artist with an empty `genres[]` is already normal today ("if not yet classified, the
+  array is empty"), so the empty case is the tested path, not the edge case.
+- When genres are unavailable, coherence falls back to **source provenance** — tracks from the
+  same source, and artists that co-appear on the same albums, are treated as adjacent. This is
+  weaker and it is not nothing.
+- The fallback is exercised by a fixture with no genres on any artist, so the day the field
+  disappears the app degrades instead of breaking.
 
 **Familiarity is measured well; depth is estimated.** Familiarity comes from the user's own
 library, top tracks, and follows — those endpoints survive, and set membership is exact. Depth
@@ -259,15 +385,73 @@ interface SpotifyClient {
   getSavedTracks(): Promise<readonly Track[]>;
   getTopTracks(range: TopRange): Promise<readonly Track[]>;
   getPlaylistTracks(id: PlaylistId): Promise<readonly Track[]>;
+  getUserPlaylists(): Promise<readonly PlaylistSummary[]>;
   createPlaylist(input: CreatePlaylistInput): Promise<PlaylistId>;
   // …
 }
 ```
 
+`getUserPlaylists` reads `GET /me/playlists` and is what makes the headline exclusion (§2.3) a
+click rather than a pasted link. The `/users/{id}/playlists` form went in the 2026-02 cull; the
+`/me` form did not. A `PlaylistSummary` is `{ id, name, trackCount }` — `trackCount` is Spotify's
+own `tracks.total`, so naming a playlist costs nothing and only reading its tracks spends a
+request. The picker keeps a link/URI/id field underneath the listing, because listing reaches
+only what a person owns or follows and a public playlist they do neither with is a fair thing to
+exclude.
+
 Two implementations ship, in the same namespace:
 
 - **`LiveSpotifyClient`** — real HTTP, zod-validated at the boundary, quota-aware (§5.2).
 - **`FakeSpotifyClient`** — backed by fixtures, deterministic, no network.
+
+#### 5.1.1 Endpoint facts the client is built against
+
+Verified against the current reference, because several differ from what the old app assumed:
+
+| Operation          | Endpoint                            | Limits that matter                        |
+| ------------------ | ----------------------------------- | ----------------------------------------- |
+| Search             | `GET /search`                       | `limit` ≤ 10, `offset` ≤ 1000. See §2.2.1 |
+| Top tracks/artists | `GET /me/top/{type}`                | `limit` ≤ 50 — **not** capped like search |
+| Saved tracks       | `GET /me/tracks`                    | `limit` ≤ 50                              |
+| Playlist items     | `GET /playlists/{id}/items`         | Renamed from `/tracks` in 2026-02         |
+| Own playlists      | `GET /me/playlists`                 | `limit` ≤ 50; entries can be `null`       |
+| Add items          | `POST /playlists/{id}/items`        | 100 URIs per request                      |
+| Create playlist    | `POST /me/playlists`                | `/users/{id}/playlists` was removed       |
+| Cover upload       | `PUT /playlists/{id}/images`        | base64 JPEG, ≤ 256 KB, returns 202        |
+| Artist / album     | `GET /artists/{id}`, `/albums/{id}` | One at a time; batch forms were removed   |
+
+The batch removals are the expensive change: resolving 300 tracks' artists once meant 6
+requests and now means up to 300, which is what the cache and the budget display in §5.2 exist
+to manage.
+
+Three details that only surface once you build against it:
+
+- **`GET /albums/{id}/tracks` returns _simplified_ tracks** — no album object, so no
+  `release_date` and no album track count. Every album-tracks fetch therefore needs a companion
+  `GET /albums/{id}` to supply `releaseYear` and the denominator the depth proxy divides by
+  (§3.5). It caches well, but it is a real per-album cost the budget must count.
+- **`limit ≤ 10` with `offset ≤ 1000` reaches 1,010 results, not 1,000.** Paging stops when the
+  _next_ offset would exceed the ceiling, and reports that it stopped there — "we ran out of
+  results" and "Spotify will not show more" are different facts and the UI says which.
+- **Playlist items can be `null`, a local file, or a podcast episode.** Each is caught and
+  dropped rather than failing a page of 200 over one hole. `GET /me/playlists` carries the same
+  holes, where a followed playlist has since been deleted. A hole is counted before it is
+  dropped, because the page's own length is what says whether there is another page — filter
+  first and a list of four hundred ends at the first hole in it.
+
+#### 5.1.2 The client returns catalog tracks, not domain tracks
+
+`SpotifyClient` cannot return a complete `Track`, and pretending otherwise pushes the problem
+into every call site. Two fields are outside its reach:
+
+- **`sourceIndex`** is resolver provenance. The client does not know which recipe source asked.
+- **`artistGenres`** needs a separate `GET /artists/{id}`, which the track payload cannot
+  supply.
+
+So the client returns `CatalogTrack` — a `Track` without `sourceIndex`, with `artistGenres`
+empty — and `resolveSources` fills both in. `FakeSpotifyClient` returns empty genres too, on
+purpose, so the enrichment path is exercised in demo mode and in every test rather than only
+against live data.
 
 **The fake is load-bearing, not a testing convenience.** It is what lets someone clone this
 repo and run it with zero credentials, which is the difference between a portfolio project
@@ -302,12 +486,37 @@ Scopes, and why each is needed:
 | Scope                                               | For                                                |
 | --------------------------------------------------- | -------------------------------------------------- |
 | `playlist-modify-private`, `playlist-modify-public` | Writing the playlist — the point                   |
-| `playlist-read-private`                             | Playlist sources and playlist exclusions           |
+| `playlist-read-private`                             | Listing, and playlist sources and exclusions       |
 | `user-library-read`                                 | The `library` source and the `inLibrary` exclusion |
 | `user-top-read`                                     | The `topTracks` source and familiarity scoring     |
 | `user-read-recently-played`                         | The `heardRecently` exclusion                      |
 | `user-follow-read`                                  | The `followedArtists` source                       |
 | `ugc-image-upload`                                  | Generated cover art                                |
+
+#### 5.3.1 Flow details
+
+- **`code_challenge_method` is `S256`.** Verifier is 43–128 chars of CSPRNG output; challenge
+  is its SHA-256, base64url-encoded without padding.
+- **PKCE needs no client secret.** The token exchange sends `client_id` and `code_verifier`
+  instead. This is why setup asks for exactly one Spotify value (§9, README): there is no
+  secret to leak, rotate, or explain.
+- **`state` is required in practice, not just recommended.** It is generated per attempt and
+  checked on return; a mismatch aborts without exchanging the code.
+- **The verifier never reaches client JavaScript.** It is minted server-side and held in a
+  short-lived httpOnly cookie alongside `state`, both cleared on callback.
+- **The return path is a third handoff cookie**, not a field inside `state`. Both work; they
+  have different tamper stories, and this one keeps `state` doing exactly one job. All three
+  cookies are cleared on every callback path, success or failure.
+- **`state` is checked before `code` is read**, so a mismatch returns without ever reaching the
+  token exchange.
+- **Refresh tokens may or may not rotate.** The response "might not include a new refresh
+  token" — when it does not, keep using the existing one. Handling only the rotating case is
+  the bug that logs everyone out an hour in.
+- **Access tokens last an hour.** Refresh happens server-side, ahead of expiry, on demand
+  rather than on a timer.
+
+The only two environment values the app needs are `SPOTIFY_CLIENT_ID` and a `SESSION_SECRET`
+for cookie encryption. Without them the app runs in demo mode rather than failing (§5.1).
 
 ---
 
