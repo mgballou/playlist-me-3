@@ -178,6 +178,20 @@ _resolving sources_ touches the network, and only when the sources themselves ch
 
 **Never re-fetch to re-roll.** The pool is already in hand.
 
+### 2.11 Accelerate the repeated path
+
+Re-roll is the repeated action, and lock and reject are close behind. The path a person walks
+twenty times in a sitting earns a shortcut the path they walk once does not.
+
+- **An accelerator is printed on the control it triggers**, so it teaches itself.
+- **The fast path is an accelerant, never the only path.** Everything reachable by swipe,
+  gesture or shortcut is reachable by a plain control that does the same thing. This is the
+  rule §7.1's swipe leans on, and it is the same one WCAG 2.5.7 asks for.
+- **An accelerator never fires while someone is entering text.** One guard, checked centrally,
+  not per control.
+- **Undo is part of the fast path.** An action fast enough to repeat is fast enough to trigger
+  by mistake.
+
 ---
 
 ## 3. One action per region
@@ -529,6 +543,14 @@ Rules:
 
 - **A collapsed region is inert**, not merely hidden. Someone moving through by keyboard must
   never land inside a panel they cannot see.
+
+  **Inert means removed from the tab order and the accessibility tree. It does not mean
+  unmounted.** The distinction is load-bearing and was found the hard way: a `Reveal` can
+  afford to unmount its body, because a closed reveal holds no state anyone is waiting on. A
+  paged section cannot — the deck has to keep building while it is off-screen, or the count on
+  its key dies and §7.1's whole reason for existing goes with it. Use whichever of the two
+  mechanisms the region's state can afford, and never assume the cheaper one.
+
 - **A glyph-only control keeps its name.** The visible label goes; the accessible name does not.
 
 ### 7.1 Narrow is paged, not stacked
@@ -574,7 +596,7 @@ The rules that make it a device rather than a tab bar:
   place in it again.
 - **Unselected sections are inert** (§7), not merely off-screen.
 - **Swiping sideways moves between sections**, and the keys are its single-pointer
-  alternative (§13, 2.5.7). Swipe is an accelerant, never the only path (§2.13).
+  alternative (§13, 2.5.7). Swipe is an accelerant, never the only path (§2.11).
 - **Changing section transitions; it does not rebuild.** The crown, the keys and the ledger
   never rebuild at all.
 
