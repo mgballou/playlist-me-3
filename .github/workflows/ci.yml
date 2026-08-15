@@ -42,7 +42,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @pm/web exec playwright install --with-deps chromium
 
-      # Demo mode runs off FakeSpotifyClient, so this needs no credentials. Spec §5.1.
+      # Demo mode runs off FakeSpotifyClient, so this needs no credentials — no secrets are
+      # configured on this job on purpose, which is what proves spec §5.1's claim that a
+      # missing SPOTIFY_CLIENT_ID is demo mode rather than a crash. Playwright builds and
+      # starts the app itself; see apps/web/playwright.config.ts.
       - run: pnpm test:e2e
 
       - uses: actions/upload-artifact@v4
