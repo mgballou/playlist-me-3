@@ -25,6 +25,7 @@ import { TrackSlot } from '@/components/deck/TrackSlot';
 import { ErrorNotice } from '@/components/errors/ErrorNotice';
 import { Reveal } from '@/components/primitives/Reveal';
 import { indexOfCursor, nextCursor } from '@/lib/deck/cursor';
+import { SECTION_DEFINITIONS } from '@/lib/layout/sections';
 import { removeExclusion, setMaxPerArtist } from '@/lib/recipe/edit';
 import { shortfallCopy } from '@/lib/registry/shortfall';
 import { useReturnPath } from '@/lib/use-return-path';
@@ -97,8 +98,8 @@ export function Deck() {
   return (
     <div className="deck">
       <Module
-        title="Deck"
-        glyph="⏻"
+        title={SECTION_DEFINITIONS.deck.label}
+        glyph={SECTION_DEFINITIONS.deck.glyph}
         count={summary}
         actions={
           <button

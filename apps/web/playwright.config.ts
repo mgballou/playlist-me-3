@@ -24,7 +24,29 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
 
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  /**
+   * Two widths, because §7.1's two layouts differ **in kind rather than in size** and jsdom
+   * cannot measure either. The phone project is the reference viewport — 390×844, a hand
+   * holding a phone — with touch on, since a swipe between sections is a real gesture and not
+   * a mouse drag with a different name.
+   */
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+      testIgnore: /phone\.spec\.ts/,
+    },
+    {
+      name: 'phone',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        hasTouch: true,
+        isMobile: true,
+      },
+      testMatch: /phone\.spec\.ts/,
+    },
+  ],
 
   webServer: {
     command: 'pnpm build && pnpm start',

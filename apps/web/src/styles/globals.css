@@ -228,18 +228,196 @@ h4 {
   padding: var(--space-5);
 }
 
-/* Collapse is one decision, shared: `data-collapsed` is stamped from the single query in
- * lib/layout/collapse.ts, before first paint. No width is named here. §7 */
-:root[data-collapsed='true'] .stage {
-  grid-template-columns: minmax(0, 1fr);
-}
-
 .rack,
 .deck {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
   min-width: 0;
+}
+
+/* A section's wrapper. Above the threshold it is nothing — one panel in a column, carrying
+ * the same gap the rack always had, so the wide layout is untouched. §7.1 */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * Narrow is paged, not stacked. §7.1
+ *
+ * Collapse is one decision, shared: `data-collapsed` is stamped from the single query in
+ * lib/layout/collapse.ts, before first paint. No width is named here. §7
+ *
+ * The frame becomes the device: the crown and the ledger and the keys are pinned, and the
+ * one selected section scrolls between them. Nothing here is a media query, so the frame and
+ * the components can never disagree about whether there is room.
+ * ------------------------------------------------------------------------ */
+
+:root[data-collapsed='true'] .frame {
+  /* Crown, stage, keys, ledger. The stage takes what is left and scrolls inside it. */
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  height: 100dvh;
+}
+
+/**
+ * The crown and the ledger say the same things on a phone; they just stop spending a desk's
+ * worth of room saying them. Three stacked rows of crown was a third of the viewport gone
+ * before the recipe got a word in — the rails tighten, the copy does not change (§12.1).
+ */
+:root[data-collapsed='true'] .crown,
+:root[data-collapsed='true'] .ledger {
+  gap: var(--space-2);
+  padding-inline: var(--space-3);
+}
+
+:root[data-collapsed='true'] .crown__state,
+:root[data-collapsed='true'] .ledger__summary,
+:root[data-collapsed='true'] .ledger__act {
+  gap: var(--space-2);
+}
+
+/**
+ * A source row on a phone: the kind chip, its contribution and its remove key share the head,
+ * and the subject takes the line under them. Sharing one line ellipsed "Anything tagged new"
+ * down to "A…", which is §14's rule failing in the other direction — a layout designed
+ * against the seed data rather than against the content it will really hold.
+ */
+:root[data-collapsed='true'] .row:not(.row--block) .row__head {
+  flex-wrap: wrap;
+}
+
+:root[data-collapsed='true'] .row:not(.row--block) .row__subject {
+  order: 1;
+  flex-basis: 100%;
+}
+
+/* The subject was what held the count out to the trailing edge; with it on its own line, the
+ * count says so itself rather than drifting back in beside the chip. §6 */
+:root[data-collapsed='true'] .row:not(.row--block) .row__count {
+  margin-inline-start: auto;
+}
+
+:root[data-collapsed='true'] .stage {
+  grid-template-columns: minmax(0, 1fr);
+  padding: var(--space-4);
+  overflow-y: auto;
+  /* The scroll stops here rather than dragging the page behind it. */
+  overscroll-behavior: contain;
+  /* Vertical panning is the browser's; sideways is the frame's, so a swipe between sections
+   * is never in a race with a scroll. */
+  touch-action: pan-y;
+}
+
+/* The rack steps out of the way and its three panels become three of the four sections. */
+:root[data-collapsed='true'] .rack {
+  display: contents;
+}
+
+/* Before hydration this attribute is the only thing that knows which section to show — the
+ * pre-paint script has already settled `data-collapsed`, and `hidden` has not arrived yet. */
+:root[data-collapsed='true'] .panel[data-selected='false'] {
+  display: none;
+}
+
+/* `hidden` carries the same fact to the accessibility tree, and the reset's `display: flex`
+ * would otherwise beat the attribute's own default. */
+.panel[hidden] {
+  display: none;
+}
+
+/**
+ * Changing section transitions; it does not rebuild (§7.1). The house transition, and only
+ * that: a short rise plus a fade (§8). The animation runs because the panel gains a box, so
+ * nothing has to remember to trigger it — and `--motion-scale` takes the travel out under a
+ * reduced-motion preference, leaving a real cross-fade rather than nothing at all.
+ */
+:root[data-collapsed='true'] .panel[data-selected='true'] {
+  animation: section-in var(--duration-base) var(--ease-out);
+}
+
+@keyframes section-in {
+  from {
+    opacity: 0;
+    translate: 0 calc(var(--space-3) * var(--motion-scale));
+  }
+
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * The keys. Pinned above the ledger, at thumb height: the crown is information,
+ * the keys are travel, the ledger is the way out — that order, always. §7.1
+ * ------------------------------------------------------------------------ */
+
+.keys {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--space-1);
+  z-index: var(--z-rack);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-raised);
+  border-block-start: var(--hairline) solid var(--line);
+  box-shadow: inset 0 var(--hairline) 0 0 var(--edge-top);
+}
+
+/**
+ * A key face on the desk. It is proud, it catches the light along its top edge, and the
+ * selected one is **pressed in** — the position is marked by height, never by colour,
+ * because navigation never takes the accent (§3, §5).
+ */
+.key {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: var(--target-min);
+  min-width: 0;
+  padding: var(--space-2) var(--space-1);
+  border: none;
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  box-shadow: var(--relief-raised);
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: var(--press-transition);
+}
+
+.key:active:not(:disabled) {
+  translate: 0 calc(var(--press-travel) * var(--motion-scale));
+  box-shadow: var(--relief-pressed);
+  background: var(--surface-well);
+}
+
+.key[aria-selected='true'] {
+  background: var(--surface-well);
+  color: var(--ink);
+  box-shadow: var(--relief-well);
+}
+
+/* The count is the point: BLOCK −68 has to be legible from the deck. §7.1 */
+.key__count {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-tight);
+}
+
+.key[aria-selected='true'] .key__count {
+  color: var(--ink);
+}
+
+/* The lamp and the name are one unit on the key face, and the name is what keeps the lamp
+ * from being the only carrier of which section you are in (§5 rule 4). */
+.key .led {
+  gap: var(--space-1);
+  max-width: 100%;
 }
 
 /* The ledger is the bottom rail. It catches the same light from above — an inset highlight
@@ -288,6 +466,10 @@ h4 {
 .module__band {
   display: flex;
   align-items: center;
+  /* A band too narrow for its own contents wraps whole slots to a second row. It never
+   * breaks a reading in half: "1 hr 53 / min" is a number coming apart, which §14 forbids
+   * for the same reason it forbids a count that twitches its neighbours. */
+  flex-wrap: wrap;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
   background: var(--surface-raised);
@@ -315,6 +497,7 @@ h4 {
   margin-inline-start: auto;
   min-width: 4ch;
   text-align: end;
+  white-space: nowrap;
   font-size: var(--text-sm);
   color: var(--ink-muted);
 }
@@ -372,6 +555,9 @@ h4 {
   text-transform: uppercase;
   font-size: var(--text-xs);
   text-decoration: none;
+  /* A key's legend is silkscreened on one line. RE-ROLL breaking in half in a narrow heading
+   * band is the label coming apart, not the layout adapting. §14 */
+  white-space: nowrap;
   cursor: pointer;
   transition: var(--press-transition);
 }

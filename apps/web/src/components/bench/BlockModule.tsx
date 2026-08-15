@@ -16,6 +16,7 @@ import type { Exclusion } from '@pm/core';
 import { format } from '@pm/core';
 
 import { Module } from '@/components/shell/Module';
+import { SECTION_DEFINITIONS, blockCount } from '@/lib/layout/sections';
 import { addExclusion, removeExclusion, singletonExclusionKinds } from '@/lib/recipe/edit';
 import { useWorkbench } from '@/lib/workbench/use-workbench';
 import { AddExclusion } from './AddExclusion';
@@ -28,16 +29,11 @@ export function BlockModule() {
 
   return (
     <Module
-      title="Block"
-      glyph="✕"
-      // Before a build, and while nothing is blocked, the count is how many blocks there
-      // are. Once a build has run against at least one block it becomes what they removed,
-      // which is the number worth looking at (§2.3). "−0" would be neither.
-      count={
-        totalRemoved === null || recipe.exclusions.length === 0
-          ? String(recipe.exclusions.length)
-          : `−${String(totalRemoved)}`
-      }
+      title={SECTION_DEFINITIONS.block.label}
+      glyph={SECTION_DEFINITIONS.block.glyph}
+      // The same number the BLOCK key carries below the threshold, from the same function, so
+      // the two can never drift. §7.1
+      count={blockCount(recipe, result)}
     >
       {recipe.exclusions.length === 0 ? (
         <div className="empty">
