@@ -73,6 +73,11 @@ export const DIAL_DEFINITIONS: Readonly<Record<DialName, DialDefinition>> = {
 
 /** Keyboard steps, so the dial is reachable in sensible increments (§10, §13). */
 export const DIAL_STEP = 0.05;
+/**
+ * Shift and an arrow, or a page key. A quarter of the sweep, which is exactly one word band
+ * either way — so the larger step moves the announcement rather than only the number.
+ */
+export const DIAL_BIG_STEP = 0.25;
 export const DIAL_MIN = 0;
 export const DIAL_MAX = 1;
 

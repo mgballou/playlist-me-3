@@ -231,19 +231,20 @@ Each arrow is one way. A reverse reference is a cycle.
 
 ### 4.2 Two themes, complete blocks
 
-This app ships **light and dark**. The light theme is the one the design is drawn for — every
-music tool on the market is dark, and a high-contrast paper ground is both distinctive and
-better for the thing the person is judging, which is album art.
+This app ships **light and dark**, and **dark is the one the design is drawn for**. A console
+lives in a dim room; more to the point, a dark ground is what flatters album art, which is most
+of what is on screen.
 
-**That is not the same as light being what loads.** Resolution order, stated once so the two
-ideas stop being confused:
+Resolution order, stated once so the two ideas stop being confused:
 
 1. A stored explicit choice wins.
 2. Otherwise follow `prefers-color-scheme`.
-3. Which on a system with no preference is light.
+3. With no preference either way, dark — which `color-scheme: dark light` delivers for free,
+   because the used scheme is the first listed when the viewer has expressed none.
 
-So a person on a dark system gets dark on first visit, and the design still considers light its
-home.
+Light is a **complete recolor, not a dimmed copy**. The two grounds are different materials:
+cool desaturated slate in the dark, warm grey panel in the light. Inverting one to get the
+other produces mud.
 
 - **Both themes live in one `light-dark()` declaration per token**, not in two blocks. The
   original rule here was "complete blocks of the same token set, never a subset" — this is a
@@ -270,32 +271,49 @@ they are there to assess.
 
 ## 5. Depth and color
 
-The direction is **tactile mixtape**: chunky, high-contrast, physical, playful. The reference
-is a risograph poster and a label-maker, **not** skeuomorphic leather and brushed metal. Flat
-color fields, hard edges, confident weight.
+The direction is **Console**: a mixing desk in a dim room. Machined panels, recessed wells,
+knobs and faders you operate with your hands, one signal red, amber meters. Dark is the theme
+this is drawn for.
+
+> **What this replaced, and why it matters.** The first attempt was called "tactile mixtape"
+> and produced thick outlines and hard offset shadows. That is **neubrutalism** — a printing
+> language, descended from deliberate crudeness. It reads as 8-bit chunk, not as hardware, and
+> in dark mode it drew a near-white box around every module. The lesson is worth keeping:
+> _naming a feeling is not naming a language._ "Tactile" pointed at two opposite idioms, and
+> the wrong one was cheaper to build.
 
 Four rules carry the whole palette.
 
-**1. One color means act.** The accent marks the single thing to do in a region. Nothing else
-earns it. _A sprinkled accent is exactly why nothing stands out._
+**1. One color means act, and it is red.** The accent marks the single thing to do in a region.
+Nothing else earns it. _A sprinkled accent is exactly why nothing stands out._
 
-**2. One color carries structure, and never fills.** Rules, borders, the heading band's edge,
-the active mark. All line work. A structural fill reads as an action, and only the accent means
-act.
+**2. Nothing is separated by an outline.** A panel is told from its neighbour by **its own
+value plus the light falling on it**. Proud things carry a soft shadow and a faint top edge;
+recessed things carry an inset one. A seam is a hairline you have to look for, and
+`tokens.test.ts` asserts it stays _below_ 3:1 against its panel — the one contrast rule in this
+file that is a ceiling rather than a floor.
 
-**3. Depth comes from hard offset shadows and thick borders, not soft blurs.** A control sits
-on the page with a solid, un-blurred offset and a heavy border. That is what makes it read as
-an object you could press.
+**3. Depth is light, and the light comes from above.** Three heights and no others: `well`
+(machined in), `flat` (flush), `raised` (proud). A raised element gets a soft shadow plus a
+`--edge-top` highlight; that highlight is what makes a panel read as moulded rather than drawn.
 
-> **Divergence, stated on purpose.** _Refactoring UI_ teaches elevation through soft ambient
-> plus direct shadows, consistent with a single light source. That is right for airy,
-> photographic interfaces. This one is a printed object: a soft shadow on a flat color field
-> reads as a mistake, where a hard offset reads as ink. The book's real point survives —
-> **elevation must be a system, not a per-component guess.** Ours has exactly three heights.
+> **Alignment, stated on purpose.** _Refactoring UI_ teaches elevation through an ambient
+> shadow plus a direct one, consistent with a single light source. The previous direction
+> diverged from that and was wrong to. This one follows it, because a console **is** a lit
+> physical object. The book's real point is unchanged either way: **elevation must be a system,
+> not a per-component guess.**
 
-**4. A pressed control actually moves.** On press, a raised control translates into its own
-shadow and the shadow shrinks to nothing. This is the single detail that sells the whole
-direction, it costs four lines, and it must be consistent everywhere or it reads as a bug.
+**4. Amber reports, red acts.** Status is an LED: a small illuminated dot, amber for ordinary
+state, red when something is held or armed. An LED is never the only carrier of a state — it
+always sits beside a word or a glyph, because red and amber are 48° apart and that is not
+enough for everyone.
+
+**Every meter is amber too, and this is the rule people get wrong.** A knob's value arc and a
+fader's travelled length report a position; they do not act. Building them in the accent is
+the obvious move and it was tried: two knobs and two faders put four red marks in the rack,
+and the deck's one red key — the thing the whole region exists to do — stopped being the
+thing your eye went to. That is rule 1 failing exactly as it says it will. **The accent is
+spent on the one action per region and on the one state that is armed, and on nothing else.**
 
 Supporting rules:
 
@@ -313,55 +331,65 @@ Colors are authored in **oklch**, so the dark theme can hold a hue and move only
 chroma (§4.2). These are the starting values; tune them against the contrast assertions in
 `tokens.test.ts`, never by eye alone.
 
-**The accent is yellow, and it carries ink, not white.** This is the decision the whole
-direction rests on. A yellow slab with black text, a heavy black border and a hard black
-offset is unmistakably a printed, pressable object — and it dodges the collision every
-orange-red accent runs into, where the action color and the danger color are neighbors. Here
-danger keeps red to itself.
+**The accent is red and it carries white.** The fill is dark enough to hold small type at
+4.5:1, which is why `--accent` is not the brightest red available — `--accent-bright` is, and
+it is reserved for indicators, which are never text.
 
-| Token              | Light                  | Dark                  | Job                                    |
-| ------------------ | ---------------------- | --------------------- | -------------------------------------- |
-| `--ground`         | `oklch(96.5% .012 85)` | `oklch(17% .015 265)` | The page. Warm paper / cool slate.     |
-| `--surface`        | `oklch(99% .004 85)`   | `oklch(22% .018 265)` | Cards, modules.                        |
-| `--surface-raised` | `oklch(100% 0 0)`      | `oklch(27% .02 265)`  | The heading band, raised controls.     |
-| `--surface-well`   | `oklch(93% .014 85)`   | `oklch(13% .012 265)` | Recessed module bodies.                |
-| `--ink`            | `oklch(18% .02 60)`    | `oklch(95% .01 85)`   | Text, borders, the offset shadow.      |
-| `--ink-muted`      | `oklch(46% .02 60)`    | `oklch(70% .012 85)`  | Secondary text. Never on a color fill. |
-| `--line`           | `oklch(18% .02 60)`    | `oklch(95% .01 85)`   | Borders. Same as ink — they are ink.   |
-| `--accent`         | `oklch(86% .17 95)`    | `oklch(84% .18 95)`   | **Act.** Ink text on it, always.       |
-| `--accent-line`    | `oklch(72% .15 95)`    | `oklch(70% .16 95)`   | Accent at line weight.                 |
-| `--danger`         | `oklch(58% .21 25)`    | `oklch(66% .20 25)`   | Destructive. Never primary.            |
+`tokens.css` is the source of truth. This table follows it, never the reverse.
 
-**Source tones** (§5.1) — an even ramp 140°→329°, 27° apart. `tokens.css` is the source of
-truth; this table follows it, not the other way round.
+| Token              | Light                   | Dark                    | Job                                        |
+| ------------------ | ----------------------- | ----------------------- | ------------------------------------------ |
+| `--ground`         | `oklch(83% .008 87)`    | `oklch(19.5% .006 260)` | The desk the panels sit on.                |
+| `--surface`        | `oklch(87.9% .007 89)`  | `oklch(23% .007 258)`   | The panel.                                 |
+| `--surface-raised` | `oklch(92.2% .006 85)`  | `oklch(27.1% .009 256)` | Proud of the panel.                        |
+| `--surface-top`    | `oklch(96% .005 85)`    | `oklch(31% .01 256)`    | The highest step. Knob caps, key faces.    |
+| `--surface-well`   | `oklch(76.1% .009 85)`  | `oklch(16.8% .004 264)` | Machined into the panel. Slots, wells.     |
+| `--ink`            | `oklch(21.8% .004 264)` | `oklch(91.1% .005 248)` | Text.                                      |
+| `--ink-muted`      | `oklch(42% .007 85)`    | `oklch(60.1% .013 252)` | Secondary text. Never on a colour fill.    |
+| `--line`           | `oklch(70% .008 85)`    | `oklch(33% .008 258)`   | **A seam, not a border.** Stays under 3:1. |
+| `--accent`         | `oklch(50% .19 27)`     | `oklch(54% .185 25)`    | **Act.** Carries white.                    |
+| `--accent-bright`  | `oklch(58% .2 27)`      | `oklch(66% .2 25)`      | Indicators. Never text.                    |
+| `--led`            | `oklch(58% .12 68)`     | `oklch(75.8% .14 73)`   | Amber. Reports, never acts.                |
+| `--danger`         | `oklch(48% .17 29)`     | `oklch(54% .18 29)`     | Destructive. Never primary.                |
+
+**Source tones** (§5.1) — an even ramp 110°→313°, ~29° apart, dodging the red accent by ≥45°
+and the amber LED by ≥35°.
 
 | Source kind       | Hue | Light                | Dark                 |
 | ----------------- | --- | -------------------- | -------------------- |
-| `newReleases`     | 140 | `oklch(54% .14 140)` | `oklch(70% .13 140)` |
-| `search`          | 167 | `oklch(55% .12 167)` | `oklch(71% .11 167)` |
-| `library`         | 194 | `oklch(55% .12 194)` | `oklch(72% .11 194)` |
-| `followedArtists` | 221 | `oklch(55% .14 221)` | `oklch(71% .13 221)` |
-| `artist`          | 248 | `oklch(55% .17 248)` | `oklch(70% .15 248)` |
-| `track`           | 275 | `oklch(55% .18 275)` | `oklch(71% .16 275)` |
-| `playlist`        | 302 | `oklch(55% .19 302)` | `oklch(72% .17 302)` |
-| `topTracks`       | 329 | `oklch(56% .19 329)` | `oklch(72% .17 329)` |
+| `track`           | 110 | `oklch(48% .13 110)` | `oklch(74% .13 110)` |
+| `newReleases`     | 139 | `oklch(48% .13 139)` | `oklch(74% .13 139)` |
+| `search`          | 168 | `oklch(48% .11 168)` | `oklch(74% .11 168)` |
+| `library`         | 197 | `oklch(48% .10 197)` | `oklch(74% .10 197)` |
+| `followedArtists` | 226 | `oklch(48% .12 226)` | `oklch(72% .11 226)` |
+| `artist`          | 255 | `oklch(46% .15 255)` | `oklch(70% .13 255)` |
+| `playlist`        | 284 | `oklch(46% .16 284)` | `oklch(72% .14 284)` |
+| `topTracks`       | 313 | `oklch(46% .17 313)` | `oklch(72% .15 313)` |
 
-The arc is chosen so every tone clears the accent (95°) by ≥45° and the danger red (25°) by
-≥55°. **The first draft of this table failed its own rule** — a green at 130° sat 35° from the
-accent — and `tokens.test.ts` caught it by measuring rather than by eye. That is why the test
-computes hue separation instead of trusting the table.
+**An earlier draft of this table failed its own rule** — a green sat 35° from the accent — and
+`tokens.test.ts` caught it by measuring rather than by eye. That is why the test computes hue
+separation instead of trusting the table.
 
-**Three heights, and no others** (§5 rule 3). The shadow is `--ink`, never a gray, never
-blurred:
+**Three heights, and no others** (§5 rule 3). Separation is light, never an outline:
 
-| Height   | Border | Offset | Use                                     |
-| -------- | ------ | ------ | --------------------------------------- |
-| `flat`   | `2px`  | none   | Recessed wells, inert rows.             |
-| `raised` | `2px`  | `3px`  | Module cards, track slots, secondaries. |
-| `lifted` | `3px`  | `5px`  | The primary action. One per region.     |
+| Height   | Surface            | Light                            | Use                                   |
+| -------- | ------------------ | -------------------------------- | ------------------------------------- |
+| `well`   | `--surface-well`   | `--shadow-well` (inset)          | Slots, recessed module bodies, faders |
+| `flat`   | `--surface`        | none                             | Flush panels, inert rows              |
+| `raised` | `--surface-raised` | `--shadow-raised` + `--edge-top` | Modules, rows, keys, secondaries      |
+| `lifted` | `--surface-top`    | `--shadow-lifted` + `--edge-top` | The primary action. One per region.   |
 
-On press, a `raised` or `lifted` control translates by its own offset and the offset goes to
-zero (§5 rule 4). Under reduced motion it changes fill instead of translating (§8).
+**A height is one step from the ground the thing sits on, not one fixed token.** The deck's
+ground is `--surface-neutral` (§4.3), which is a step _lighter_ than the panel in the light
+theme — so a track slot on `--surface-raised` sits two points of lightness from its own ground
+there and reads as nothing at all. Measured from the neutral ground, one step up is
+`--surface-top`, which is what a slot takes, and it reads in both themes. The system is the
+step; the token is whatever that step lands on.
+
+On press, a proud control sinks: the shadow shortens and the top edge dims, over
+`--duration-fast` with `--ease-settle`. It travels 1px, not 4 — hardware has weight, and a big
+jump reads as a sticker rather than a key. Under reduced motion it changes fill and shadow
+without translating (§8).
 
 ### 5.1 Source tones are identity, not action
 
@@ -401,9 +429,11 @@ One primitive fixes it, and every titled region is built from it:
 Type rules:
 
 - **One scale.** Sizes come from `--text-*`; nothing is nudged to fit.
-- **Two families, and the split is meaningful.** `--font-display` is a heavy grotesque and
-  carries labels, headings and the app's voice. `--font-numeric` is monospaced and carries
-  anything compared character by character: counts, durations, years, request costs.
+- **Two families, and the split is meaningful.** `--font-display` carries labels, headings and
+  the app's voice; `--font-numeric` is monospaced and carries anything compared character by
+  character: counts, durations, years, request costs. §6.1 names both, and it names them as
+  one family rather than as a grotesque and a mono — a console's silkscreen and its readouts
+  are cut from the same drawing.
 - **Module labels are uppercase with generous tracking.** They are printed labels on a device.
   Body copy never is.
 - **A number that changes in place must not reflow the text around it.** Tabular figures and
@@ -416,17 +446,20 @@ Type rules:
 Loaded through `next/font/google`, which self-hosts them at build time — so the app still has
 no external font request and §14's "nothing depends on a service being reachable" holds.
 
-- **`--font-display`: Bricolage Grotesque.** Variable, with a real optical-size axis and enough
-  character to carry a printed-object direction without tipping into novelty. It sets headings,
-  module labels, buttons and body copy. Module labels run uppercase with `0.08em` tracking;
-  body copy never does.
-- **`--font-numeric`: JetBrains Mono.** Every count, duration, year, request cost and dial
-  value. It is chosen for legibility in dense figures rather than for character — the display
-  face already supplies that. Always `font-variant-numeric: tabular-nums`, so a number that
-  changes in place cannot move its neighbors (§14).
+- **`--font-display`: IBM Plex Sans.** Drawn for technical and industrial contexts, which is
+  exactly what a panel of labelled controls is. It is neutral without being anonymous — the
+  slight humanist warmth keeps it from reading as a system default. Sets headings, module
+  labels, buttons and body copy.
+- **`--font-numeric`: IBM Plex Mono.** Every count, duration, year, request cost and knob
+  value. Always `font-variant-numeric: tabular-nums`, so a number changing in place cannot
+  move its neighbours (§14).
 
-Two families, and the split is the meaning: **the display face talks, the mono face measures.**
-A third family is a decision that has to be argued for, not a preference.
+The pair is deliberate: **they are the same family**, drawn together, so the readout under a
+knob and the label above it share their skeleton. That is how real panel silkscreen works, and
+it is why this is not simply "a sans and a mono".
+
+Module labels run **uppercase at `--tracking-label` (0.16em)** and small — silkscreen is wide
+and quiet, not big and bold. Body copy never does.
 
 ---
 
@@ -615,6 +648,20 @@ The rules that keep it legible rather than clever:
 - **It reads at 64px**, which is its size on the shelf. Test it there first, not at full size.
 - **It uses the same source tones as the bench** (§5.2), so a violet band on the shelf and a
   violet chip in the rack are the same idea.
+- **It holds one palette in both themes**, and that palette is the light one. It is a printed
+  object, and it ends up on Spotify where there is no theme at all, so a cover that followed
+  the app's would be one recipe with two fingerprints.
+
+  **That last rule cannot be built by reading the semantic layer**, and the way it fails is
+  worth writing down because it looked correct for two versions. A browser resolves
+  `light-dark()` in a custom property at **computed-value time**, so a canvas asking
+  `getComputedStyle(root).getPropertyValue('--ink')` is handed one already-themed colour with
+  no pair left to split. Code that parsed off "the light half" found nothing to parse, passed
+  the value through, and the cover quietly followed the theme — black in the dark, white in
+  the light, and whichever the person happened to be looking at got uploaded. The fix is a set
+  of `--cover-*` component tokens (§4.1) that hold no `light-dark()` at all, and the assertion
+  is that they never do.
+
 - **It never contains album art.** The cover describes the recipe, not the result — the result
   changes on every re-roll and the cover must not.
 - **A recipe with no sources draws the empty state**, not a blank square.

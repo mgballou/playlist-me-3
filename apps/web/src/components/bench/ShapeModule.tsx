@@ -14,7 +14,9 @@
 
 import { ORDER_STRATEGIES, format } from '@pm/core';
 
+import { Fader } from '@/components/primitives/Fader';
 import { Module } from '@/components/shell/Module';
+import type { Travel } from '@/lib/controls/travel';
 import { DIAL_DEFINITIONS } from '@/lib/registry/dials';
 import { ORDER_DEFINITIONS } from '@/lib/registry/order';
 import {
@@ -33,6 +35,34 @@ import { useWorkbench } from '@/lib/workbench/use-workbench';
 import { Dial } from './Dial';
 
 const MAX_PER_ARTIST_CEILING = 10;
+
+/**
+ * The three faders' travel. Every step is a whole unit a person would name — nobody asks for
+ * 37.5 tracks — and the larger step is a tenth of the run, so shift-arrow crosses the panel
+ * in ten presses rather than in two hundred (§10, §13).
+ */
+const COUNT_TRAVEL: Travel = {
+  min: TARGET_COUNT_MIN,
+  max: TARGET_COUNT_MAX,
+  step: 1,
+  bigStep: 10,
+};
+
+const MINUTES_TRAVEL: Travel = {
+  min: TARGET_MINUTES_MIN,
+  max: TARGET_MINUTES_MAX,
+  step: 5,
+  bigStep: 30,
+};
+
+const PER_ARTIST_TRAVEL: Travel = { min: 1, max: MAX_PER_ARTIST_CEILING, step: 1, bigStep: 3 };
+
+/** In words, never a bare number (§13) — a screen reader saying "4" says nothing at all. */
+function perArtistWords(most: number): string {
+  return most === 1
+    ? 'Most per artist: one track by any one act'
+    : `Most per artist: up to ${String(most)} tracks by any one act`;
+}
 
 export function ShapeModule() {
   const { recipe, setRecipe } = useWorkbench();
@@ -75,63 +105,51 @@ export function ShapeModule() {
         </div>
 
         {byCount ? (
-          <label className="field">
-            <span className="field__label label">Tracks</span>
-            <input
-              className="field__input numeric"
-              type="number"
-              min={TARGET_COUNT_MIN}
-              max={TARGET_COUNT_MAX}
-              value={shape.target.kind === 'count' ? shape.target.count : TARGET_COUNT_MIN}
-              onChange={(event) => {
-                const count = Number.parseInt(event.currentTarget.value, 10);
-                if (!Number.isFinite(count)) return;
-                setRecipe(
-                  setTarget(recipe, {
-                    kind: 'count',
-                    count: Math.min(TARGET_COUNT_MAX, Math.max(TARGET_COUNT_MIN, count)),
-                  }),
-                );
-              }}
-            />
-          </label>
+          <Fader
+            label="Tracks"
+            value={shape.target.kind === 'count' ? shape.target.count : TARGET_COUNT_MIN}
+            travel={COUNT_TRAVEL}
+            valueText={format({
+              kind: 'trackCount',
+              count: shape.target.kind === 'count' ? shape.target.count : TARGET_COUNT_MIN,
+            })}
+            readout={String(shape.target.kind === 'count' ? shape.target.count : TARGET_COUNT_MIN)}
+            onChange={(count) => {
+              setRecipe(setTarget(recipe, { kind: 'count', count }));
+            }}
+          />
         ) : (
-          <label className="field">
-            <span className="field__label label">Minutes</span>
-            <input
-              className="field__input numeric"
-              type="number"
-              min={TARGET_MINUTES_MIN}
-              max={TARGET_MINUTES_MAX}
-              value={targetMinutes(shape.target)}
-              onChange={(event) => {
-                const minutes = Number.parseInt(event.currentTarget.value, 10);
-                if (!Number.isFinite(minutes)) return;
-                const bounded = Math.min(TARGET_MINUTES_MAX, Math.max(TARGET_MINUTES_MIN, minutes));
-                setRecipe(setTarget(recipe, { kind: 'duration', ms: bounded * MS_PER_MINUTE }));
-              }}
-            />
-          </label>
+          <Fader
+            label="Minutes"
+            value={targetMinutes(shape.target)}
+            travel={MINUTES_TRAVEL}
+            valueText={format({
+              kind: 'duration',
+              ms: targetMinutes(shape.target) * MS_PER_MINUTE,
+            })}
+            readout={format({
+              kind: 'duration',
+              ms: targetMinutes(shape.target) * MS_PER_MINUTE,
+            })}
+            onChange={(minutes) => {
+              setRecipe(setTarget(recipe, { kind: 'duration', ms: minutes * MS_PER_MINUTE }));
+            }}
+          />
         )}
       </fieldset>
 
-      <div className="field-row">
-        <label className="field">
-          <span className="field__label label">Most per artist</span>
-          <input
-            className="field__input numeric"
-            type="number"
-            min={1}
-            max={MAX_PER_ARTIST_CEILING}
-            value={shape.maxPerArtist}
-            onChange={(event) => {
-              const value = Number.parseInt(event.currentTarget.value, 10);
-              if (!Number.isFinite(value)) return;
-              setRecipe(setMaxPerArtist(recipe, Math.min(MAX_PER_ARTIST_CEILING, value)));
-            }}
-          />
-        </label>
+      <Fader
+        label="Most per artist"
+        value={shape.maxPerArtist}
+        travel={PER_ARTIST_TRAVEL}
+        valueText={perArtistWords(shape.maxPerArtist)}
+        readout={String(shape.maxPerArtist)}
+        onChange={(most) => {
+          setRecipe(setMaxPerArtist(recipe, most));
+        }}
+      />
 
+      <div className="field-row">
         <label className="field">
           <span className="field__label label">Order</span>
           <select

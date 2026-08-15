@@ -115,6 +115,32 @@ describe('the tinkering loop', () => {
     );
   });
 
+  /**
+   * §5 rule 4: a held slot lights an LED, and the lamp is never the only carrier — the word
+   * HELD appears beside it, and the padlock on the key turns. A test that only read the lamp
+   * would pass on a deck nobody colourblind could use.
+   */
+  it('lights a lamp on a held slot', async () => {
+    const user = userEvent.setup();
+    await benchWithTracks();
+    expect(document.querySelectorAll('.led[data-lit="true"][data-tone="held"]')).toHaveLength(0);
+
+    await user.click(screen.getAllByRole('button', { name: /^Lock Track/ })[0]!);
+
+    expect(
+      document.querySelectorAll('.led[data-lit="true"][data-tone="held"]').length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('puts a word beside the lamp rather than only a colour', async () => {
+    const user = userEvent.setup();
+    await benchWithTracks();
+    await user.click(screen.getAllByRole('button', { name: /^Lock Track/ })[0]!);
+
+    const lamp = document.querySelector('.led[data-lit="true"][data-tone="held"]');
+    expect(lamp?.textContent).toBe('Held');
+  });
+
   it('removes a rejected track from the deck', async () => {
     const user = userEvent.setup();
     await benchWithTracks();

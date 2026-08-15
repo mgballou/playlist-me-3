@@ -1,26 +1,48 @@
 'use client';
 
 /**
- * A dial. The two of these are the most-touched controls in the app (spec §2.4), so they get
- * everything §10 and §13 ask of a slider and one thing more:
+ * A dial — a `Knob`, wearing what the registry says about it.
  *
- * - **A real slider.** `input[type=range]`, so keyboard steps, page steps, home and end all
- *   come from the platform rather than from a hand-rolled div with a drag handler.
- * - **It always shows its value**, and the value is in words as well as on the rule.
+ * The two of these are the most-touched controls in the app (spec §2.4), and in the Console
+ * direction they are the headline control rather than a rule with a handle on it: a rotary
+ * knob you turn with your hand (ui-sensibility §5).
+ *
+ * The component owns nothing but the wiring. Everything a person reads comes from
+ * `registry/dials.ts` (§12), and everything a person operates comes from `Knob` (§13):
+ *
+ * - **It always shows its value**, and the value is in words, on the panel, beside the knob.
  * - **`aria-valuetext` names the position in words**, never just the number (§13). "0.75"
  *   tells nobody anything; "mostly things I know" does.
  * - **The honesty line is rendered, always** (§12.1). Depth carries its approximation and
  *   familiarity says plainly that it is exact. Neither is behind a hover, a tooltip or a
- *   reveal, because a caveat nobody sees is not a caveat.
+ *   reveal, because a caveat nobody sees is not a caveat. It is bound to the slider with
+ *   `aria-describedby`, so it is announced with the control rather than sitting near it.
  *
- * Moving a dial costs nothing: it is not part of `resolveKey`, so it never re-fetches and the
- * deck rebuilds instantly from the pool already in hand (§2.10).
+ * Turning a dial costs nothing: it is not part of `resolveKey`, so it never re-fetches and
+ * the deck rebuilds instantly from the pool already in hand (§2.10).
  */
 
 import { useId } from 'react';
 
+import { Knob } from '@/components/primitives/Knob';
+import type { Travel } from '@/lib/controls/travel';
 import type { DialDefinition } from '@/lib/registry/dials';
-import { DIAL_MAX, DIAL_MIN, DIAL_STEP, dialValueText, dialWords } from '@/lib/registry/dials';
+import {
+  DIAL_BIG_STEP,
+  DIAL_MAX,
+  DIAL_MIN,
+  DIAL_STEP,
+  dialValueText,
+  dialWords,
+} from '@/lib/registry/dials';
+
+/** The bounds and the keyboard increments, from the registry rather than from this screen. */
+const DIAL_TRAVEL: Travel = {
+  min: DIAL_MIN,
+  max: DIAL_MAX,
+  step: DIAL_STEP,
+  bigStep: DIAL_BIG_STEP,
+};
 
 export type DialProps = {
   readonly definition: DialDefinition;
@@ -29,51 +51,32 @@ export type DialProps = {
 };
 
 export function Dial({ definition, value, onChange }: DialProps) {
-  const inputId = useId();
   const noteId = useId();
-
   const note = definition.approximation ?? definition.exactness;
 
   return (
     <div className="dial" data-dial={definition.name}>
-      <div className="dial__head">
-        <label className="dial__label label" htmlFor={inputId}>
-          {definition.label}
-        </label>
-        <output className="dial__value numeric" htmlFor={inputId}>
-          {dialWords(definition, value)}
-        </output>
-      </div>
-
-      <input
-        id={inputId}
-        className="dial__input"
-        type="range"
-        min={DIAL_MIN}
-        max={DIAL_MAX}
-        step={DIAL_STEP}
+      <Knob
+        label={definition.label}
         value={value}
-        aria-valuetext={dialValueText(definition, value)}
-        aria-describedby={note === null ? undefined : noteId}
-        onChange={(event) => {
-          onChange(Number(event.currentTarget.value));
-        }}
-      />
-
-      <div className="dial__ends muted">
-        <span>{definition.lowLabel}</span>
-        <span>{definition.highLabel}</span>
-      </div>
-
-      {note === null ? null : (
-        <p
-          className="dial__note"
-          id={noteId}
-          data-estimate={definition.approximation === null ? 'false' : 'true'}
-        >
-          {note}
-        </p>
-      )}
+        travel={DIAL_TRAVEL}
+        valueText={dialValueText(definition, value)}
+        readout={dialWords(definition, value)}
+        lowLabel={definition.lowLabel}
+        highLabel={definition.highLabel}
+        onChange={onChange}
+        describedBy={note === null ? undefined : noteId}
+      >
+        {note === null ? null : (
+          <p
+            className="dial__note"
+            id={noteId}
+            data-estimate={definition.approximation === null ? 'false' : 'true'}
+          >
+            {note}
+          </p>
+        )}
+      </Knob>
     </div>
   );
 }

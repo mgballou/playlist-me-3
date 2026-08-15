@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test';
 import { expect, test } from '@playwright/test';
 
 /**
@@ -6,17 +7,30 @@ import { expect, test } from '@playwright/test';
  * this passes, demo mode genuinely works rather than merely being documented.
  */
 
+/**
+ * `exact` is load-bearing. The crown's indicator is an LED, and §5 rule 4 says a lamp is never
+ * the only carrier — so the word sits beside it, and the full notice sits behind it for a
+ * screen reader. A loose match would resolve to the hidden notice and quietly assert nothing
+ * about the thing on screen.
+ */
+const indicator = (page: Page) => page.getByText('demo mode', { exact: true });
+
 test('the app loads into demo mode and says so', async ({ page }) => {
   await page.goto('/');
 
-  await expect(page.getByText('demo mode')).toBeVisible();
+  await expect(indicator(page)).toBeVisible();
 });
 
-test('demo mode names itself for a screen reader, not only by color', async ({ page }) => {
+test('demo mode names itself in words, not only by the colour of a lamp', async ({ page }) => {
   await page.goto('/');
 
-  const notice = page.getByText('demo mode');
-  await expect(notice).toContainText(/demo/i);
+  await expect(indicator(page)).toContainText(/demo/i);
+});
+
+test('the lamp beside the words is lit', async ({ page }) => {
+  await page.goto('/');
+
+  await expect(page.locator('.crown__demo .led')).toHaveAttribute('data-lit', 'true');
 });
 
 test('the empty bench offers exactly one thing to do', async ({ page }) => {

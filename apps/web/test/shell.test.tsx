@@ -231,20 +231,55 @@ describe('terminal states', () => {
   });
 });
 
-describe('the two dials', () => {
-  it('are real sliders', () => {
+/**
+ * The bench's hardware: two knobs and two faders, all four of them real sliders. The shapes
+ * differ and what they owe does not — §10 and §13 ask the same of both, and these read them
+ * off the assembled frame rather than off the primitives in isolation.
+ */
+describe('the bench’s controls', () => {
+  it('are all real sliders', () => {
     render(<Frame connection={demo} />);
-    expect(screen.getAllByRole('slider')).toHaveLength(2);
+    expect(screen.getAllByRole('slider')).toHaveLength(4);
   });
 
-  it('take keyboard steps', () => {
+  it('gives the two dials knobs', () => {
     render(<Frame connection={demo} />);
-    expect(screen.getAllByRole('slider')[0]).toHaveAttribute('step', '0.05');
+    expect(screen.getByRole('slider', { name: 'Familiar' })).toBeInTheDocument();
+    expect(screen.getByRole('slider', { name: 'Deep cuts' })).toBeInTheDocument();
   });
 
-  it('name their position in words', () => {
+  it('gives the two quantities faders', () => {
     render(<Frame connection={demo} />);
-    expect(screen.getAllByRole('slider')[0]).toHaveAttribute(
+    expect(screen.getByRole('slider', { name: 'Tracks' })).toBeInTheDocument();
+    expect(screen.getByRole('slider', { name: 'Most per artist' })).toBeInTheDocument();
+  });
+
+  it('reaches every slider from the keyboard', () => {
+    render(<Frame connection={demo} />);
+    for (const slider of screen.getAllByRole('slider')) {
+      expect(slider).toHaveAttribute('tabindex', '0');
+    }
+  });
+
+  it('names every position in words rather than in numbers alone', () => {
+    render(<Frame connection={demo} />);
+    for (const slider of screen.getAllByRole('slider')) {
+      expect(slider.getAttribute('aria-valuetext')).toMatch(/[a-z]{4,}/);
+    }
+  });
+
+  it('carries real bounds on every slider', () => {
+    render(<Frame connection={demo} />);
+    for (const slider of screen.getAllByRole('slider')) {
+      expect(slider).toHaveAttribute('aria-valuemin');
+      expect(slider).toHaveAttribute('aria-valuemax');
+      expect(slider).toHaveAttribute('aria-valuenow');
+    }
+  });
+
+  it('names the familiarity dial’s position in words', () => {
+    render(<Frame connection={demo} />);
+    expect(screen.getByRole('slider', { name: 'Familiar' })).toHaveAttribute(
       'aria-valuetext',
       'Familiar: no preference',
     );
@@ -263,9 +298,27 @@ describe('the two dials', () => {
   it('move without costing a request', async () => {
     const user = userEvent.setup();
     render(<Frame connection={demo} />);
-    const depth = screen.getAllByRole('slider')[1]!;
+    const depth = screen.getByRole('slider', { name: 'Deep cuts' });
     depth.focus();
     await user.keyboard('{ArrowRight}');
-    expect(depth).toHaveAttribute('aria-valuetext', 'Deep cuts: no preference');
+    expect(depth).toHaveAttribute('aria-valuenow', '0.55');
+  });
+
+  it('turns a knob to a new word with a large step', async () => {
+    const user = userEvent.setup();
+    render(<Frame connection={demo} />);
+    const depth = screen.getByRole('slider', { name: 'Deep cuts' });
+    depth.focus();
+    await user.keyboard('{Shift>}{ArrowRight}{/Shift}');
+    expect(depth).toHaveAttribute('aria-valuetext', 'Deep cuts: leaning toward the obvious ones');
+  });
+
+  it('moves a fader without touching the network', async () => {
+    const user = userEvent.setup();
+    render(<Frame connection={demo} />);
+    const tracks = screen.getByRole('slider', { name: 'Tracks' });
+    tracks.focus();
+    await user.keyboard('{End}');
+    expect(tracks).toHaveAttribute('aria-valuetext', '200 tracks');
   });
 });

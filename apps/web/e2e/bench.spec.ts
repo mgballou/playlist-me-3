@@ -89,3 +89,53 @@ test('blocking a playlist is reachable and removes tracks', async ({ page }) => 
 
   await expect(page.getByText(/kids jams/i).first()).toBeVisible({ timeout: 60_000 });
 });
+
+/**
+ * The two hardware primitives, in a browser. Geometry is what jsdom cannot measure (§15), so
+ * the unit tests own the value arithmetic and the ARIA contract and these own the one thing
+ * they cannot: that the marks a person actually looks at move with the value.
+ */
+test('a knob turns from the keyboard and its arc follows', async ({ page }) => {
+  await page.goto('/');
+
+  const knob = page.getByRole('slider', { name: 'Deep cuts' });
+  const arc = page.locator('[data-dial="depth"] .knob__value');
+  await knob.focus();
+
+  await page.keyboard.press('Home');
+  const atLow = await arc.evaluate((node) => (node as SVGElement).style.strokeDashoffset);
+
+  await page.keyboard.press('End');
+  await expect(knob).toHaveAttribute('aria-valuenow', '1');
+  const atHigh = await arc.evaluate((node) => (node as SVGElement).style.strokeDashoffset);
+
+  expect(Number(atHigh)).toBeLessThan(Number(atLow));
+});
+
+test('a fader cap travels the length of its slot', async ({ page }) => {
+  await page.goto('/');
+
+  const fader = page.getByRole('slider', { name: 'Tracks' });
+  const cap = fader.locator('.fader__cap');
+  await fader.focus();
+
+  await page.keyboard.press('Home');
+  await expect(fader).toHaveAttribute('aria-valuenow', '1');
+  const low = await cap.boundingBox();
+
+  await page.keyboard.press('End');
+  await expect(fader).toHaveAttribute('aria-valuenow', '200');
+  await expect
+    .poll(async () => (await cap.boundingBox())?.x ?? 0)
+    .toBeGreaterThan((low?.x ?? 0) + 100);
+});
+
+test('a held slot lights its lamp and says so in words', async ({ page }) => {
+  await page.goto('/');
+  await addFirstSource(page);
+
+  await page.getByRole('button', { name: /^Lock .*, slot 1$|^Lock .* to slot 1$/ }).click();
+
+  const lamp = page.locator('.slot .led[data-tone="held"][data-lit="true"]').first();
+  await expect(lamp).toContainText('Held');
+});
