@@ -11,6 +11,7 @@
 
 import { format } from '@pm/core';
 
+import { Led } from '@/components/primitives/Led';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import type { Connection } from '@/lib/spotify/connection';
 import { useReturnPath } from '@/lib/use-return-path';
@@ -29,14 +30,17 @@ export function Crown({ connection }: CrownProps) {
       <span className="crown__wordmark">Playlist.me</span>
 
       <span className="crown__state">
+        {/* The connection is a lamp on the desk, and the lamp is never the only carrier —
+            the word beside it says which state it is in. §5 rule 4 */}
         {connection.mode === 'demo' ? (
-          <span className="crown__demo label" title={connection.notice}>
-            <span aria-hidden="true">▚</span>
-            demo mode
+          <span className="crown__demo" title={connection.notice}>
+            <Led lit tone="report" label="demo mode" />
             <span className="visually-hidden">— {connection.notice}</span>
           </span>
         ) : (
-          <span className="label muted">connected</span>
+          <span className="crown__demo" title={connection.notice}>
+            <Led lit tone="report" label="connected" />
+          </span>
         )}
 
         {/* Connecting and disconnecting take you somewhere, so they are structural and

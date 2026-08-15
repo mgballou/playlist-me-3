@@ -2,7 +2,7 @@ import { artistId, playlistId } from '@pm/core';
 import { describe, expect, it } from 'vitest';
 
 import { COVER_GEOMETRY, coverPlan, wrapName } from '@/lib/cover/plan';
-import { lightSideOf } from '@/lib/cover/palette';
+import { coverTokenFor } from '@/lib/cover/palette';
 import { SOURCE_DEFINITIONS } from '@/lib/registry/sources';
 import { makeRecipe } from './support/pool';
 
@@ -142,12 +142,21 @@ describe('a long name cannot run off the art', () => {
   });
 });
 
-describe('the palette reads the light side of a token', () => {
-  it('picks the light value from a light-dark pair', () => {
-    expect(lightSideOf('light-dark(oklch(96% 0 0), oklch(17% 0 0))')).toBe('oklch(96% 0 0)');
+/**
+ * The cover holds one palette in both themes (§11.1). The previous implementation kept the
+ * light half of a `light-dark()` pair, which a browser has already resolved by the time
+ * `getComputedStyle` hands it over — so the cover silently followed the theme and whichever
+ * one the person was looking at got uploaded to Spotify. The `--cover-*` tokens hold no pair
+ * at all, and this is the one translation between what the registry names and what the
+ * canvas draws.
+ */
+describe('the cover draws from its own fixed palette', () => {
+  it('maps a semantic tone onto its cover token', () => {
+    expect(coverTokenFor('--source-artist')).toBe('--cover-source-artist');
   });
 
-  it('leaves a plain value alone', () => {
-    expect(lightSideOf(' oklch(86% 0.17 95) ')).toBe('oklch(86% 0.17 95)');
+  it('maps every tone the same way rather than through a second table', () => {
+    expect(coverTokenFor('--source-playlist')).toBe('--cover-source-playlist');
+    expect(coverTokenFor('--ink')).toBe('--cover-ink');
   });
 });

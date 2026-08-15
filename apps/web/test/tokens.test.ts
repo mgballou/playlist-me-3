@@ -17,21 +17,23 @@ const css = readFileSync(
  * `--accent-ink` is the interesting one: the accent is yellow and carries ink in both
  * themes, so black-on-yellow holds light and dark alike. See ui-sensibility §4.2, §5.2.
  */
-const INTENTIONALLY_THEME_INVARIANT = new Set(['--accent-ink']);
+const INTENTIONALLY_THEME_INVARIANT = new Set(['--accent-ink', '--danger-ink']);
 
 /** Semantic color tokens, which are the ones a theme can half-declare. */
 const SEMANTIC_COLOR_TOKENS = [
   '--ground',
   '--surface',
   '--surface-raised',
+  '--surface-top',
   '--surface-well',
   '--surface-neutral',
   '--ink',
   '--ink-muted',
   '--line',
   '--accent',
-  '--accent-line',
+  '--accent-bright',
   '--accent-ink',
+  '--led',
   '--danger',
   '--danger-ink',
   '--source-artist',
@@ -169,34 +171,36 @@ describe('contrast', () => {
     expect(contrast(accentInk, accent)).toBeGreaterThanOrEqual(AA_BODY);
   });
 
-  /**
-   * The accent is a light yellow slab in *both* themes, so it separates from its ground by a
-   * different means in each, and neither means works in both:
-   *
-   *   light — yellow on paper is 1.38:1. The ink edge does the separating (17:1).
-   *   dark  — yellow on slate is 11.7:1. The fill does it; the ink edge is inner detail.
-   *
-   * So the invariant is not "the fill reads" and not "the edge reads" — it is that an accent
-   * control is told apart from its ground by *at least one of them*. That is what WCAG 1.4.11
-   * non-text contrast actually asks for, and asserting either one alone fails a theme.
-   */
   it.each(['light', 'dark'] as const)(
-    'an accent control separates from the ground in %s',
+    'an accent control reads against the ground in %s',
     (theme) => {
       const accent = themeValues('--accent')[theme];
-      const edge = themeValues('--accent-ink')[theme];
       const ground = themeValues('--ground')[theme];
-      const strongest = Math.max(contrast(accent, ground), contrast(edge, ground));
-      expect(strongest).toBeGreaterThanOrEqual(AA_LARGE);
+      expect(contrast(accent, ground)).toBeGreaterThanOrEqual(AA_LARGE);
     },
   );
 
+  /**
+   * The inverse assertion, and the one that would have caught the direction breaking.
+   *
+   * `--line` is a **seam**, not a border: it suggests where a panel ends and should be nearly
+   * invisible until looked for. The previous token set made it near-white on a dark ground —
+   * an 11:1 outline around every module. Separation in this direction comes from panel value
+   * and from light (§5), so a seam that reads as an outline is a defect, and the test is that
+   * it stays *below* the threshold rather than above one.
+   */
+  it.each(['light', 'dark'] as const)('the seam stays quiet against its panel in %s', (theme) => {
+    const line = themeValues('--line')[theme];
+    const surface = themeValues('--surface')[theme];
+    expect(contrast(line, surface)).toBeLessThan(AA_LARGE);
+  });
+
   it.each(['light', 'dark'] as const)(
-    'the accent edge reads against its own fill in %s',
+    'the panel value steps are distinguishable in %s',
     (theme) => {
-      const edge = themeValues('--accent-ink')[theme];
-      const accent = themeValues('--accent')[theme];
-      expect(contrast(edge, accent)).toBeGreaterThanOrEqual(AA_LARGE);
+      const well = themeValues('--surface-well')[theme];
+      const top = themeValues('--surface-top')[theme];
+      expect(contrast(top, well)).toBeGreaterThan(1.2);
     },
   );
 
@@ -209,8 +213,10 @@ describe('contrast', () => {
 
 describe('source tones', () => {
   const SOURCE_TOKENS = SEMANTIC_COLOR_TOKENS.filter((t) => t.startsWith('--source-'));
-  const ACCENT_HUE = 95;
+  const ACCENT_HUE = 25;
+  const LED_HUE = 73;
   const MIN_SEPARATION = 45;
+  const MIN_LED_SEPARATION = 35;
 
   function hueOf(value: string): number {
     const match = /oklch\(\s*[\d.]+%?\s+[\d.]+\s+([\d.]+)\s*\)/.exec(value);
@@ -219,18 +225,83 @@ describe('source tones', () => {
   }
 
   /** Shortest arc between two hues, in degrees. */
-  function separation(hue: number): number {
-    return Math.abs(((hue - ACCENT_HUE + 540) % 360) - 180);
+  function separation(hue: number, from: number): number {
+    return Math.abs(((hue - from + 540) % 360) - 180);
   }
 
   it.each(SOURCE_TOKENS)('%s sits clear of the accent hue in both themes', (token) => {
     const values = themeValues(token);
-    const closest = Math.min(separation(hueOf(values.light)), separation(hueOf(values.dark)));
+    const closest = Math.min(
+      separation(hueOf(values.light), ACCENT_HUE),
+      separation(hueOf(values.dark), ACCENT_HUE),
+    );
     expect(closest).toBeGreaterThanOrEqual(MIN_SEPARATION);
+  });
+
+  /** A chip must be mistakable for neither the colour that acts nor the one that reports. */
+  it.each(SOURCE_TOKENS)('%s sits clear of the status LED hue in both themes', (token) => {
+    const values = themeValues(token);
+    const closest = Math.min(
+      separation(hueOf(values.light), LED_HUE),
+      separation(hueOf(values.dark), LED_HUE),
+    );
+    expect(closest).toBeGreaterThanOrEqual(MIN_LED_SEPARATION);
+  });
+
+  /**
+   * Amber reports, red acts, and the two must not be confusable. Separation is asserted on
+   * hue rather than on luminance: a console's meters and its record light are told apart by
+   * colour and position, not by brightness. §5's "colour is never the only carrier" is what
+   * keeps this honest for anyone who cannot separate the two hues — every LED state also
+   * carries a word or a glyph.
+   */
+  it.each(['light', 'dark'] as const)('the status LED is not the accent hue in %s', (theme) => {
+    const led = hueOf(themeValues('--led')[theme]);
+    expect(separation(led, ACCENT_HUE)).toBeGreaterThanOrEqual(MIN_LED_SEPARATION);
   });
 
   it.each(['light', 'dark'] as const)('every source tone is distinct in %s', (theme) => {
     const hues = SOURCE_TOKENS.map((token) => hueOf(themeValues(token)[theme]));
     expect(new Set(hues).size).toBe(SOURCE_TOKENS.length);
+  });
+});
+
+/**
+ * §11.1: the cover is a printed object and holds **one palette in both themes**, so that one
+ * recipe is one fingerprint on the shelf, in the save preview and in the JPEG that goes up to
+ * Spotify.
+ *
+ * The assertion is that these tokens carry no `light-dark()` at all, and it is the assertion
+ * that would have caught the bug they exist to fix: a browser resolves `light-dark()` in a
+ * custom property at computed-value time, so a cover reading the semantic layer through
+ * `getComputedStyle` got one already-themed color and followed the theme — while the code
+ * that was meant to pin it looked, and tested, as though it worked.
+ */
+describe('the cover palette is theme-invariant by construction', () => {
+  const declarations = [...css.matchAll(/^\s*(--cover-[\w-]+):\s*([^;]+);/gm)];
+
+  it('declares a cover palette at all', () => {
+    expect(declarations.length).toBeGreaterThan(0);
+  });
+
+  it.each(declarations.map((match) => [match[1] ?? '', match[2] ?? '']))(
+    '%s holds no light-dark pair to resolve',
+    (_token, value) => {
+      expect(value).not.toContain('light-dark');
+    },
+  );
+
+  it.each(['--cover-ink', '--cover-ground', '--cover-accent'])(
+    '%s resolves to a color',
+    (token) => {
+      expect(() => parseOklch(resolve(declarationOf(token)))).not.toThrow();
+    },
+  );
+
+  it('covers every source tone the registry can hand it', () => {
+    const tones = declarations.filter((match) => (match[1] ?? '').startsWith('--cover-source-'));
+    expect(tones).toHaveLength(
+      SEMANTIC_COLOR_TOKENS.filter((t) => t.startsWith('--source-')).length,
+    );
   });
 });

@@ -1,148 +1,203 @@
 /**
- * Design tokens. Normative source: docs/ui-sensibility.md §4, §5.2, §6.1.
+ * Design tokens — the **Console** direction. Normative source: docs/ui-sensibility.md §4, §5.
  *
- * Three tiers, one direction: primitives → semantic → component. Each arrow is one way.
- * Nothing outside this file names a primitive; everything else consumes the semantic layer.
+ * A mixing desk in a dim room. Dark is the theme this is drawn for; light ships complete and
+ * is a recolor, not a dimmed copy.
  *
- * Both themes live in a single `light-dark()` declaration per token rather than in two
- * blocks. §4.2 asks that a theme never declare a subset of the token set — this makes that
- * structurally impossible, because there is no second block to fall out of sync. The theme
- * toggle sets `color-scheme` on the root and every token follows.
+ * The rule that replaced the old one: **nothing is separated by an outline.** A panel is told
+ * from its neighbour by its own value plus the light falling on it — proud things carry a soft
+ * shadow, recessed things carry an inset one, and a seam is a hairline you have to look for.
+ * The previous token set drew a 2px near-white border around every module in dark mode, which
+ * is what a printing language does, not what a device does.
+ *
+ * Both themes live in one `light-dark()` declaration per token (§4.2), so a token cannot be
+ * defined for one theme and forgotten for the other. `color-scheme: dark light` makes dark the
+ * used scheme when the viewer has expressed no preference, while still honoring one that has.
  */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: dark light;
 
   /* ---------------------------------------------------------------------------
    * Primitives. Raw values. Named nowhere else.
    * ------------------------------------------------------------------------ */
 
-  /* Paper and slate — the two grounds. */
-  --c-paper: oklch(96.5% 0.012 85);
-  --c-paper-bright: oklch(99% 0.004 85);
-  --c-paper-white: oklch(100% 0 0);
-  --c-paper-well: oklch(93% 0.014 85);
-  --c-slate: oklch(17% 0.015 265);
-  --c-slate-raised: oklch(22% 0.018 265);
-  --c-slate-high: oklch(27% 0.02 265);
-  --c-slate-well: oklch(13% 0.012 265);
+  /* Panel greys. Cool and desaturated in the dark, warm and papery in the light —
+   * the two grounds are different materials, not the same one at two brightnesses. */
+  --c-panel-dark: oklch(23% 0.007 258);
+  --c-panel-dark-hi: oklch(27.1% 0.009 256);
+  --c-panel-dark-top: oklch(31% 0.01 256);
+  --c-well-dark: oklch(16.8% 0.004 264);
+  --c-ground-dark: oklch(19.5% 0.006 260);
 
-  /* Ink — text, borders, and the offset shadow, which is ink and not a gray. */
-  --c-ink: oklch(18% 0.02 60);
-  --c-ink-muted: oklch(46% 0.02 60);
-  --c-bone: oklch(95% 0.01 85);
-  --c-bone-muted: oklch(70% 0.012 85);
+  --c-panel-light: oklch(87.9% 0.007 89);
+  --c-panel-light-hi: oklch(92.2% 0.006 85);
+  --c-panel-light-top: oklch(96% 0.005 85);
+  --c-well-light: oklch(76.1% 0.009 85);
+  --c-ground-light: oklch(83% 0.008 87);
 
-  /* The one color that means act. Carries ink, never white. §5.2 */
-  --c-accent: oklch(86% 0.17 95);
-  --c-accent-dark: oklch(84% 0.18 95);
-  --c-accent-line: oklch(72% 0.15 95);
-  --c-accent-line-dark: oklch(70% 0.16 95);
+  --c-ink-dark: oklch(91.1% 0.005 248);
+  --c-dim-dark: oklch(60.1% 0.013 252);
+  --c-ink-light: oklch(21.8% 0.004 264);
+  /* 42%, not the 52% the panel grey suggests: muted ink still has to clear AA body text
+   * against the light ground, and the light ground here is a mid grey, not paper. */
+  --c-dim-light: oklch(42% 0.007 85);
 
-  --c-danger: oklch(58% 0.21 25);
-  --c-danger-dark: oklch(66% 0.2 25);
+  /* One colour means act, and it is red. The fill is dark enough to carry white type;
+   * the bright variant is for indicators, which are never text. */
+  --c-red-dark: oklch(54% 0.185 25);
+  --c-red-bright-dark: oklch(66% 0.2 25);
+  --c-red-light: oklch(50% 0.19 27);
+  --c-red-bright-light: oklch(58% 0.2 27);
 
-  /* Source tones. Identity, never action. §5.1
-   *
-   * An even ramp from 140° to 329°, 27° apart. That arc is chosen so every tone clears the
-   * accent (95°) by at least 45° and the danger red (25°) by at least 55° — a chip must never
-   * be mistakable for the one color that means act, nor for the one that means destructive.
-   * `tokens.test.ts` measures both, which is how the first draft's green at 130° got caught. */
-  --c-source-new: oklch(54% 0.14 140);
-  --c-source-new-dark: oklch(70% 0.13 140);
-  --c-source-search: oklch(55% 0.12 167);
-  --c-source-search-dark: oklch(71% 0.11 167);
-  --c-source-library: oklch(55% 0.12 194);
-  --c-source-library-dark: oklch(72% 0.11 194);
-  --c-source-followed: oklch(55% 0.14 221);
-  --c-source-followed-dark: oklch(71% 0.13 221);
-  --c-source-artist: oklch(55% 0.17 248);
-  --c-source-artist-dark: oklch(70% 0.15 248);
-  --c-source-track: oklch(55% 0.18 275);
-  --c-source-track-dark: oklch(71% 0.16 275);
-  --c-source-playlist: oklch(55% 0.19 302);
-  --c-source-playlist-dark: oklch(72% 0.17 302);
-  --c-source-top: oklch(56% 0.19 329);
-  --c-source-top-dark: oklch(72% 0.17 329);
+  /* The status LED. Amber, because a console's meters are amber and because it must never
+   * be mistaken for the red that means act. */
+  --c-led-dark: oklch(75.8% 0.14 73);
+  --c-led-light: oklch(58% 0.12 68);
+
+  /* Source tones. An even ramp 110°→313°, ~29° apart. The arc dodges the red accent (25°)
+   * by ≥45° and the amber LED (73°) by ≥37°, so a chip can be mistaken for neither the
+   * thing that acts nor the thing that reports. tokens.test.ts measures both. */
+  --c-src-track-dark: oklch(74% 0.13 110);
+  --c-src-new-dark: oklch(74% 0.13 139);
+  --c-src-search-dark: oklch(74% 0.11 168);
+  --c-src-library-dark: oklch(74% 0.1 197);
+  --c-src-followed-dark: oklch(72% 0.11 226);
+  --c-src-artist-dark: oklch(70% 0.13 255);
+  --c-src-playlist-dark: oklch(72% 0.14 284);
+  --c-src-top-dark: oklch(72% 0.15 313);
+
+  --c-src-track-light: oklch(48% 0.13 110);
+  --c-src-new-light: oklch(48% 0.13 139);
+  --c-src-search-light: oklch(48% 0.11 168);
+  --c-src-library-light: oklch(48% 0.1 197);
+  --c-src-followed-light: oklch(48% 0.12 226);
+  --c-src-artist-light: oklch(46% 0.15 255);
+  --c-src-playlist-light: oklch(46% 0.16 284);
+  --c-src-top-light: oklch(46% 0.17 313);
 
   /* ---------------------------------------------------------------------------
    * Semantic. The layer everything consumes. Names a job, never a value.
    * ------------------------------------------------------------------------ */
 
-  --ground: light-dark(var(--c-paper), var(--c-slate));
-  --surface: light-dark(var(--c-paper-bright), var(--c-slate-raised));
-  --surface-raised: light-dark(var(--c-paper-white), var(--c-slate-high));
-  --surface-well: light-dark(var(--c-paper-well), var(--c-slate-well));
+  --ground: light-dark(var(--c-ground-light), var(--c-ground-dark));
+  --surface: light-dark(var(--c-panel-light), var(--c-panel-dark));
+  --surface-raised: light-dark(var(--c-panel-light-hi), var(--c-panel-dark-hi));
+  --surface-top: light-dark(var(--c-panel-light-top), var(--c-panel-dark-top));
+  --surface-well: light-dark(var(--c-well-light), var(--c-well-dark));
 
-  /* Behind anything the person is judging — album art, a cover preview. Hue-free,
-   * outside the theme's warmth, because a tinted ground tints the thing itself. §4.3 */
-  --surface-neutral: light-dark(oklch(97% 0 0), oklch(20% 0 0));
+  /* Behind anything the person is judging — album art, a cover preview. Hue-free, outside
+   * the panel's tint, because a tinted ground tints the thing itself. §4.3 */
+  --surface-neutral: light-dark(oklch(90% 0 0), oklch(18% 0 0));
 
-  --ink: light-dark(var(--c-ink), var(--c-bone));
-  --ink-muted: light-dark(var(--c-ink-muted), var(--c-bone-muted));
-  --line: light-dark(var(--c-ink), var(--c-bone));
+  --ink: light-dark(var(--c-ink-light), var(--c-ink-dark));
+  --ink-muted: light-dark(var(--c-dim-light), var(--c-dim-dark));
 
-  --accent: light-dark(var(--c-accent), var(--c-accent-dark));
-  --accent-line: light-dark(var(--c-accent-line), var(--c-accent-line-dark));
-  /* The accent always carries ink. In both themes. This is not a mistake. §5.2 */
-  --accent-ink: var(--c-ink);
+  /**
+   * A seam, not a border. This is the token that most needs to stay quiet: it exists to
+   * suggest where one panel ends, and it should be nearly invisible until looked for.
+   * If it ever reads as an outline, the direction has been broken.
+   */
+  --line: light-dark(oklch(70% 0.008 85), oklch(33% 0.008 258));
 
-  --danger: light-dark(var(--c-danger), var(--c-danger-dark));
-  --danger-ink: light-dark(var(--c-paper-white), var(--c-ink));
+  --accent: light-dark(var(--c-red-light), var(--c-red-dark));
+  --accent-bright: light-dark(var(--c-red-bright-light), var(--c-red-bright-dark));
+  /* The accent is a saturated red in both themes, so it carries white type in both. */
+  --accent-ink: oklch(98% 0 0);
 
-  --source-artist: light-dark(var(--c-source-artist), var(--c-source-artist-dark));
-  --source-search: light-dark(var(--c-source-search), var(--c-source-search-dark));
-  --source-playlist: light-dark(var(--c-source-playlist), var(--c-source-playlist-dark));
-  --source-library: light-dark(var(--c-source-library), var(--c-source-library-dark));
-  --source-top: light-dark(var(--c-source-top), var(--c-source-top-dark));
-  --source-followed: light-dark(var(--c-source-followed), var(--c-source-followed-dark));
-  --source-new: light-dark(var(--c-source-new), var(--c-source-new-dark));
-  --source-track: light-dark(var(--c-source-track), var(--c-source-track-dark));
+  --led: light-dark(var(--c-led-light), var(--c-led-dark));
+  --danger: light-dark(oklch(48% 0.17 29), oklch(54% 0.18 29));
+  --danger-ink: oklch(98% 0 0);
+
+  --source-artist: light-dark(var(--c-src-artist-light), var(--c-src-artist-dark));
+  --source-search: light-dark(var(--c-src-search-light), var(--c-src-search-dark));
+  --source-playlist: light-dark(var(--c-src-playlist-light), var(--c-src-playlist-dark));
+  --source-library: light-dark(var(--c-src-library-light), var(--c-src-library-dark));
+  --source-top: light-dark(var(--c-src-top-light), var(--c-src-top-dark));
+  --source-followed: light-dark(var(--c-src-followed-light), var(--c-src-followed-dark));
+  --source-new: light-dark(var(--c-src-new-light), var(--c-src-new-dark));
+  --source-track: light-dark(var(--c-src-track-light), var(--c-src-track-dark));
 
   /* ---------------------------------------------------------------------------
-   * Elevation. Three heights and no others. Hard offsets, never blurs — a soft
-   * shadow on a flat color field reads as a mistake, a hard offset reads as ink. §5
+   * Component tier: the cover's palette. §4.1, §11.1
+   *
+   * The generated cover is a **printed object**. It is drawn on a canvas, uploaded to
+   * Spotify where there is no theme at all, and it must be one recipe with one fingerprint —
+   * so it holds one palette in both themes, on purpose, and that palette is the light one.
+   *
+   * This is the narrow case §4.1 keeps the component tier for, and it has to live in this
+   * file rather than beside the component, because it is the one thing that genuinely has to
+   * name a primitive: `light-dark()` cannot serve it. A browser resolves `light-dark()` in a
+   * custom property at **computed-value time**, so anything read back through
+   * `getComputedStyle` — which a canvas has no choice but to do — arrives already themed,
+   * with no second value left to pick. Pinning "the light side" in JavaScript reads as though
+   * it works and does not; this does.
    * ------------------------------------------------------------------------ */
 
-  --border-flat: 2px;
-  --border-raised: 2px;
-  --border-lifted: 3px;
+  --cover-ink: var(--c-ink-light);
+  --cover-ground: oklch(90% 0 0);
+  --cover-accent: var(--c-red-light);
 
-  --offset-raised: 3px;
-  --offset-lifted: 5px;
+  --cover-source-artist: var(--c-src-artist-light);
+  --cover-source-search: var(--c-src-search-light);
+  --cover-source-playlist: var(--c-src-playlist-light);
+  --cover-source-library: var(--c-src-library-light);
+  --cover-source-top: var(--c-src-top-light);
+  --cover-source-followed: var(--c-src-followed-light);
+  --cover-source-new: var(--c-src-new-light);
+  --cover-source-track: var(--c-src-track-light);
+
+  /* ---------------------------------------------------------------------------
+   * Elevation. Light, not outlines. Three heights and no others. §5
+   *
+   * `raised` sits proud of the panel and takes a soft shadow with a faint top highlight —
+   * a real light source, from above. `well` is machined into the panel and takes an inset
+   * shadow. `flat` is flush and takes neither.
+   * ------------------------------------------------------------------------ */
 
   --shadow-flat: none;
-  --shadow-raised: var(--offset-raised) var(--offset-raised) 0 0 var(--line);
-  --shadow-lifted: var(--offset-lifted) var(--offset-lifted) 0 0 var(--line);
+  --shadow-raised:
+    light-dark(0 1px 2px rgb(0 0 0 / 0.1), 0 1px 2px rgb(0 0 0 / 0.4)),
+    light-dark(0 3px 10px rgb(0 0 0 / 0.07), 0 4px 14px rgb(0 0 0 / 0.28));
+  --shadow-lifted:
+    light-dark(0 2px 4px rgb(0 0 0 / 0.12), 0 2px 5px rgb(0 0 0 / 0.45)),
+    light-dark(0 10px 26px rgb(0 0 0 / 0.12), 0 14px 32px rgb(0 0 0 / 0.38));
+  --shadow-well: inset 0 2px 4px light-dark(rgb(0 0 0 / 0.16), rgb(0 0 0 / 0.5));
+
+  /* The highlight along a proud element's top edge. This is the light source, and it is
+   * what makes a panel read as moulded rather than drawn. */
+  --edge-top: light-dark(rgb(255 255 255 / 0.7), rgb(255 255 255 / 0.06));
 
   --radius: 3px;
   --radius-lg: 5px;
+  --radius-pill: 999px;
 
   /* ---------------------------------------------------------------------------
    * Type. Two families, and the split is the meaning: the display face talks,
    * the mono face measures. §6.1
    * ------------------------------------------------------------------------ */
 
-  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
-  --font-numeric: var(--font-jetbrains), ui-monospace, monospace;
+  --font-display: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-numeric: var(--font-plex-mono), ui-monospace, monospace;
 
-  --text-xs: 0.75rem;
-  --text-sm: 0.875rem;
-  --text-base: 1rem;
-  --text-lg: 1.125rem;
-  --text-xl: 1.375rem;
-  --text-2xl: 1.75rem;
-  --text-3xl: 2.5rem;
-  --text-4xl: 3.5rem;
+  --text-xs: 0.7rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.0625rem;
+  --text-xl: 1.3125rem;
+  --text-2xl: 1.625rem;
+  --text-3xl: 2.25rem;
+  --text-4xl: 3rem;
 
-  --tracking-label: 0.08em;
-  --leading-tight: 1.15;
-  --leading-base: 1.5;
+  /* A console's labels are silkscreened: small, wide, quiet. */
+  --tracking-label: 0.16em;
+  --leading-tight: 1.2;
+  --leading-base: 1.55;
 
   --weight-normal: 400;
   --weight-medium: 500;
-  --weight-bold: 700;
-  --weight-black: 800;
+  --weight-bold: 650;
+  --weight-black: 750;
 
   /* ---------------------------------------------------------------------------
    * Space. One scale. Nothing is nudged to fit.
@@ -159,22 +214,25 @@
 
   /* ---------------------------------------------------------------------------
    * Motion. One vocabulary, defined once. No component invents a timing. §8
+   *
+   * Hardware has weight, so the house easing settles rather than snapping.
    * ------------------------------------------------------------------------ */
 
-  --duration-fast: 90ms;
-  --duration-base: 180ms;
-  --duration-slow: 420ms;
+  --duration-fast: 120ms;
+  --duration-base: 220ms;
+  --duration-slow: 460ms;
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  /* A control that travels and comes to rest. */
+  --ease-settle: cubic-bezier(0.34, 1.26, 0.64, 1);
 
-  /* Read by every animated primitive, so no caller has to remember. Flipped to 1 under
-   * a reduced-motion preference — the reduced branch is designed, not stripped. §8 */
+  /* Read by every animated primitive, so no caller has to remember. §8 */
   --motion-scale: 1;
 
   /* --------------------------------------------------------------------------- */
 
-  --focus-width: 3px;
+  --focus-width: 2px;
   --focus-offset: 2px;
 
   /* Smallest interactive target. WCAG 2.2 AA 2.5.8 is 24px; lock and reject sit next to
@@ -203,15 +261,13 @@
      * Collapsing every duration to 1ms is the reflex, and it is wrong here: a 1ms
      * cross-fade is not a cross-fade, it is the strip §8 explicitly forbids. What the
      * preference asks to remove is vestibular motion — translation, parallax, zoom —
-     * and `--motion-scale` is what removes those. Opacity and color are not vestibular
+     * and `--motion-scale` is what removes those. Opacity and colour are not vestibular
      * triggers, so they keep real durations and the reduced branch stays a design.
-     *
-     * A locked slot holding still while the others cross-fade is still legible here.
-     * That is the whole point.
      */
     --motion-scale: 0;
-    --duration-fast: 60ms;
-    --duration-base: 120ms;
-    --duration-slow: 200ms;
+    --duration-fast: 80ms;
+    --duration-base: 140ms;
+    --duration-slow: 220ms;
+    --ease-settle: var(--ease-out);
   }
 }

@@ -15,10 +15,17 @@
  *
  * Under reduced motion the turn becomes a cross-fade, in the stylesheet, so nothing visible
  * goes missing (§8).
+ *
+ * **A held slot lights an LED** (§5 rule 4) — the bright accent, because held is the one
+ * state on this deck that is *armed* rather than merely reported. It is never the only
+ * carrier: the lamp lights, the word HELD appears beside it, and the padlock on the key
+ * turns. Its width is reserved, so lighting it moves nothing (§14).
  */
 
 import type { Track, TrackId } from '@pm/core';
 import { format } from '@pm/core';
+
+import { Led } from '@/components/primitives/Led';
 
 export type TrackSlotProps = {
   readonly track: Track;
@@ -67,6 +74,15 @@ export function TrackSlot({
         </span>
 
         <span className="slot__acts">
+          {/* The lamp sits against the key it reports on, and only when it is lit — a lamp on
+              every slot saying "not held" is thirty rows of nothing, and thirty screen-reader
+              announcements of nothing. Its width is reserved either way, so lighting it moves
+              no neighbour (§14). The word beside it is what a screen reader hears; the solid
+              key face beside that is what everyone else sees. §5 rule 4 */}
+          <span className="slot__state">
+            {locked ? <Led lit tone="held" label="Held" quiet /> : null}
+          </span>
+
           <button
             type="button"
             className="slot__act"
@@ -78,7 +94,13 @@ export function TrackSlot({
                 : `Lock ${track.title} to slot ${String(index + 1)}`
             }
           >
-            <span aria-hidden="true">{locked ? '🔒' : '🔓'}</span>
+            {/* Geometric rather than a padlock emoji: an emoji arrives as colour art the
+                stylesheet cannot tint, and a yellow blob on this desk fights the one amber
+                that means something. A filled key face is engaged and a hollow one is not,
+                which is a difference in luminance rather than in hue. */}
+            <span className="slot__latch" aria-hidden="true">
+              {locked ? '▣' : '▢'}
+            </span>
           </button>
 
           <button
