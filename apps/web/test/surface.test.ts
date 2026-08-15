@@ -123,6 +123,7 @@ const PROUD = [
   '.picker__choice',
   '.shelf__card',
   '.switch__option',
+  '.key',
   '.overlay__panel',
   '.takeover',
   '.knob__cap',
@@ -207,6 +208,7 @@ const PRESSABLE = [
   '.picker__choice',
   '.slot__act',
   '.switch__option',
+  '.key',
 ];
 
 function pressRule(selector: string): string {
@@ -250,6 +252,59 @@ describe('the press', () => {
   it('settles rather than snapping, at the house fast duration', () => {
     expect(componentToken('--press-transition')).toContain('var(--duration-fast)');
     expect(componentToken('--press-transition')).toContain('var(--ease-settle)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §7.1: narrow is paged, not stacked. The half of that a stylesheet owns — and
+// the half that would silently become two decisions again.
+// ---------------------------------------------------------------------------
+
+describe('the paged frame', () => {
+  it('names no width of its own anywhere in the file', () => {
+    expect(BARE_CSS).not.toMatch(/@media[^{]*width/);
+  });
+
+  it('reads the one decision off the attribute the pre-paint script stamps', () => {
+    expect(BARE_CSS).toMatch(/:root\[data-collapsed='true'\] \.stage/);
+  });
+
+  it('shows one section before hydration, rather than the stack §7.1 forbids', () => {
+    expect(declarationsFor(":root[data-collapsed='true'] .panel[data-selected='false']")).toMatch(
+      /display:\s*none/,
+    );
+  });
+
+  it('scrolls the section within itself rather than scrolling the frame', () => {
+    expect(declarationsFor(":root[data-collapsed='true'] .stage")).toMatch(/overflow-y:\s*auto/);
+  });
+
+  it('leaves vertical panning to the browser, so a swipe never races a scroll', () => {
+    expect(declarationsFor(":root[data-collapsed='true'] .stage")).toMatch(/touch-action:\s*pan-y/);
+  });
+
+  it('marks the selected key by height rather than by colour', () => {
+    expect(declarationsFor(".key[aria-selected='true']")).toMatch(
+      /box-shadow:[^;]*var\(--relief-well\)/,
+    );
+  });
+
+  it('never spends the accent on travel', () => {
+    expect(declarationsFor(".key[aria-selected='true']")).not.toMatch(/var\(--accent/);
+  });
+
+  it('transitions a section change at the house duration', () => {
+    expect(declarationsFor(":root[data-collapsed='true'] .panel[data-selected='true']")).toMatch(
+      /animation:\s*section-in var\(--duration-base\)/,
+    );
+  });
+
+  it('takes the travel out of that transition under reduced motion', () => {
+    expect(css).toMatch(/@keyframes\s+section-in[\s\S]*var\(--motion-scale\)/);
+  });
+
+  it('keeps the fade under reduced motion, so nothing goes missing', () => {
+    expect(css).toMatch(/@keyframes\s+section-in[\s\S]*opacity/);
   });
 });
 

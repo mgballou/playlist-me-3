@@ -15,10 +15,20 @@ import type { DecodeError, Recipe, RecipeId, Result } from '@pm/core';
 import { RECIPE_SCHEMA_VERSION, decodeRecipe, encodeRecipe, recipeId } from '@pm/core';
 import { z } from 'zod';
 
+import type { SectionId } from '../layout/sections';
+import { isSectionId } from '../layout/sections';
 import type { KeyValueStore } from './store';
 
 export const RECIPE_KEY_PREFIX = 'recipe:';
 export const PLACE_KEY = 'place';
+
+/**
+ * The section a narrow layout is showing (§7.1), held **beside** the place rather than inside
+ * it. One record with two writers is a clobber waiting to happen: the workbench rebuilds the
+ * whole place object whenever the recipe or the seed moves, and it does not know which key is
+ * pressed in. Two keys, two owners, no read-modify-write.
+ */
+export const SECTION_KEY = 'section';
 
 /** `?r=<encoded>` — the whole recipe, no server, no row. §6 */
 export const RECIPE_URL_PARAM = 'r';
@@ -137,6 +147,17 @@ export async function loadPlace(store: KeyValueStore): Promise<RestoredPlace | n
 
 export async function forgetPlace(store: KeyValueStore): Promise<void> {
   await store.remove(PLACE_KEY);
+}
+
+/** **The selected section survives a reload** (§7.1, §2.5). */
+export async function saveSection(store: KeyValueStore, section: SectionId): Promise<void> {
+  await store.write(SECTION_KEY, section);
+}
+
+/** Null when nothing was held, or when what was held is not a section this build has. */
+export async function loadSection(store: KeyValueStore): Promise<SectionId | null> {
+  const held = await store.read(SECTION_KEY);
+  return isSectionId(held) ? held : null;
 }
 
 // ---------------------------------------------------------------------------

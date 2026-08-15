@@ -16,6 +16,7 @@ import { ORDER_STRATEGIES, format } from '@pm/core';
 
 import { Fader } from '@/components/primitives/Fader';
 import { Module } from '@/components/shell/Module';
+import { SECTION_DEFINITIONS, shapeCount } from '@/lib/layout/sections';
 import type { Travel } from '@/lib/controls/travel';
 import { DIAL_DEFINITIONS } from '@/lib/registry/dials';
 import { ORDER_DEFINITIONS } from '@/lib/registry/order';
@@ -71,13 +72,9 @@ export function ShapeModule() {
 
   return (
     <Module
-      title="Shape"
-      glyph="⚙"
-      count={
-        byCount
-          ? String(shape.target.kind === 'count' ? shape.target.count : 0)
-          : format({ kind: 'duration', ms: shape.target.kind === 'duration' ? shape.target.ms : 0 })
-      }
+      title={SECTION_DEFINITIONS.shape.label}
+      glyph={SECTION_DEFINITIONS.shape.glyph}
+      count={shapeCount(recipe)}
     >
       <fieldset className="fieldset">
         <legend className="fieldset__legend label">How long a playlist</legend>

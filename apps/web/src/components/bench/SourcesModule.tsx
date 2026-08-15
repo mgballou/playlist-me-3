@@ -14,6 +14,7 @@ import type { Source } from '@pm/core';
 import { format } from '@pm/core';
 
 import { Module } from '@/components/shell/Module';
+import { SECTION_DEFINITIONS, sourcesCount } from '@/lib/layout/sections';
 import { addSource, removeSource, replaceSource } from '@/lib/recipe/edit';
 import { useWorkbench } from '@/lib/workbench/use-workbench';
 import { AddSource } from './AddSource';
@@ -30,7 +31,11 @@ export function SourcesModule() {
   };
 
   return (
-    <Module title="Sources" glyph="▶" count={String(recipe.sources.length)}>
+    <Module
+      title={SECTION_DEFINITIONS.sources.label}
+      glyph={SECTION_DEFINITIONS.sources.glyph}
+      count={sourcesCount(recipe)}
+    >
       {empty ? (
         <div className="empty">
           <p className="empty__lead">
