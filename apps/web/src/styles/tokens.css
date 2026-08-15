@@ -1,0 +1,217 @@
+/**
+ * Design tokens. Normative source: docs/ui-sensibility.md §4, §5.2, §6.1.
+ *
+ * Three tiers, one direction: primitives → semantic → component. Each arrow is one way.
+ * Nothing outside this file names a primitive; everything else consumes the semantic layer.
+ *
+ * Both themes live in a single `light-dark()` declaration per token rather than in two
+ * blocks. §4.2 asks that a theme never declare a subset of the token set — this makes that
+ * structurally impossible, because there is no second block to fall out of sync. The theme
+ * toggle sets `color-scheme` on the root and every token follows.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* ---------------------------------------------------------------------------
+   * Primitives. Raw values. Named nowhere else.
+   * ------------------------------------------------------------------------ */
+
+  /* Paper and slate — the two grounds. */
+  --c-paper: oklch(96.5% 0.012 85);
+  --c-paper-bright: oklch(99% 0.004 85);
+  --c-paper-white: oklch(100% 0 0);
+  --c-paper-well: oklch(93% 0.014 85);
+  --c-slate: oklch(17% 0.015 265);
+  --c-slate-raised: oklch(22% 0.018 265);
+  --c-slate-high: oklch(27% 0.02 265);
+  --c-slate-well: oklch(13% 0.012 265);
+
+  /* Ink — text, borders, and the offset shadow, which is ink and not a gray. */
+  --c-ink: oklch(18% 0.02 60);
+  --c-ink-muted: oklch(46% 0.02 60);
+  --c-bone: oklch(95% 0.01 85);
+  --c-bone-muted: oklch(70% 0.012 85);
+
+  /* The one color that means act. Carries ink, never white. §5.2 */
+  --c-accent: oklch(86% 0.17 95);
+  --c-accent-dark: oklch(84% 0.18 95);
+  --c-accent-line: oklch(72% 0.15 95);
+  --c-accent-line-dark: oklch(70% 0.16 95);
+
+  --c-danger: oklch(58% 0.21 25);
+  --c-danger-dark: oklch(66% 0.2 25);
+
+  /* Source tones. Identity, never action. §5.1
+   *
+   * An even ramp from 140° to 329°, 27° apart. That arc is chosen so every tone clears the
+   * accent (95°) by at least 45° and the danger red (25°) by at least 55° — a chip must never
+   * be mistakable for the one color that means act, nor for the one that means destructive.
+   * `tokens.test.ts` measures both, which is how the first draft's green at 130° got caught. */
+  --c-source-new: oklch(54% 0.14 140);
+  --c-source-new-dark: oklch(70% 0.13 140);
+  --c-source-search: oklch(55% 0.12 167);
+  --c-source-search-dark: oklch(71% 0.11 167);
+  --c-source-library: oklch(55% 0.12 194);
+  --c-source-library-dark: oklch(72% 0.11 194);
+  --c-source-followed: oklch(55% 0.14 221);
+  --c-source-followed-dark: oklch(71% 0.13 221);
+  --c-source-artist: oklch(55% 0.17 248);
+  --c-source-artist-dark: oklch(70% 0.15 248);
+  --c-source-track: oklch(55% 0.18 275);
+  --c-source-track-dark: oklch(71% 0.16 275);
+  --c-source-playlist: oklch(55% 0.19 302);
+  --c-source-playlist-dark: oklch(72% 0.17 302);
+  --c-source-top: oklch(56% 0.19 329);
+  --c-source-top-dark: oklch(72% 0.17 329);
+
+  /* ---------------------------------------------------------------------------
+   * Semantic. The layer everything consumes. Names a job, never a value.
+   * ------------------------------------------------------------------------ */
+
+  --ground: light-dark(var(--c-paper), var(--c-slate));
+  --surface: light-dark(var(--c-paper-bright), var(--c-slate-raised));
+  --surface-raised: light-dark(var(--c-paper-white), var(--c-slate-high));
+  --surface-well: light-dark(var(--c-paper-well), var(--c-slate-well));
+
+  /* Behind anything the person is judging — album art, a cover preview. Hue-free,
+   * outside the theme's warmth, because a tinted ground tints the thing itself. §4.3 */
+  --surface-neutral: light-dark(oklch(97% 0 0), oklch(20% 0 0));
+
+  --ink: light-dark(var(--c-ink), var(--c-bone));
+  --ink-muted: light-dark(var(--c-ink-muted), var(--c-bone-muted));
+  --line: light-dark(var(--c-ink), var(--c-bone));
+
+  --accent: light-dark(var(--c-accent), var(--c-accent-dark));
+  --accent-line: light-dark(var(--c-accent-line), var(--c-accent-line-dark));
+  /* The accent always carries ink. In both themes. This is not a mistake. §5.2 */
+  --accent-ink: var(--c-ink);
+
+  --danger: light-dark(var(--c-danger), var(--c-danger-dark));
+  --danger-ink: light-dark(var(--c-paper-white), var(--c-ink));
+
+  --source-artist: light-dark(var(--c-source-artist), var(--c-source-artist-dark));
+  --source-search: light-dark(var(--c-source-search), var(--c-source-search-dark));
+  --source-playlist: light-dark(var(--c-source-playlist), var(--c-source-playlist-dark));
+  --source-library: light-dark(var(--c-source-library), var(--c-source-library-dark));
+  --source-top: light-dark(var(--c-source-top), var(--c-source-top-dark));
+  --source-followed: light-dark(var(--c-source-followed), var(--c-source-followed-dark));
+  --source-new: light-dark(var(--c-source-new), var(--c-source-new-dark));
+  --source-track: light-dark(var(--c-source-track), var(--c-source-track-dark));
+
+  /* ---------------------------------------------------------------------------
+   * Elevation. Three heights and no others. Hard offsets, never blurs — a soft
+   * shadow on a flat color field reads as a mistake, a hard offset reads as ink. §5
+   * ------------------------------------------------------------------------ */
+
+  --border-flat: 2px;
+  --border-raised: 2px;
+  --border-lifted: 3px;
+
+  --offset-raised: 3px;
+  --offset-lifted: 5px;
+
+  --shadow-flat: none;
+  --shadow-raised: var(--offset-raised) var(--offset-raised) 0 0 var(--line);
+  --shadow-lifted: var(--offset-lifted) var(--offset-lifted) 0 0 var(--line);
+
+  --radius: 3px;
+  --radius-lg: 5px;
+
+  /* ---------------------------------------------------------------------------
+   * Type. Two families, and the split is the meaning: the display face talks,
+   * the mono face measures. §6.1
+   * ------------------------------------------------------------------------ */
+
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-numeric: var(--font-jetbrains), ui-monospace, monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.5rem;
+  --text-4xl: 3.5rem;
+
+  --tracking-label: 0.08em;
+  --leading-tight: 1.15;
+  --leading-base: 1.5;
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-bold: 700;
+  --weight-black: 800;
+
+  /* ---------------------------------------------------------------------------
+   * Space. One scale. Nothing is nudged to fit.
+   * ------------------------------------------------------------------------ */
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+
+  /* ---------------------------------------------------------------------------
+   * Motion. One vocabulary, defined once. No component invents a timing. §8
+   * ------------------------------------------------------------------------ */
+
+  --duration-fast: 90ms;
+  --duration-base: 180ms;
+  --duration-slow: 420ms;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* Read by every animated primitive, so no caller has to remember. Flipped to 1 under
+   * a reduced-motion preference — the reduced branch is designed, not stripped. §8 */
+  --motion-scale: 1;
+
+  /* --------------------------------------------------------------------------- */
+
+  --focus-width: 3px;
+  --focus-offset: 2px;
+
+  /* Smallest interactive target. WCAG 2.2 AA 2.5.8 is 24px; lock and reject sit next to
+   * each other on every track, where a mis-tap is destructive, so this is larger. §13 */
+  --target-min: 2.75rem;
+
+  --z-rack: 1;
+  --z-overlay: 10;
+  --z-ledger: 20;
+  --z-takeover: 30;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    /**
+     * Movement goes to zero. Time does not.
+     *
+     * Collapsing every duration to 1ms is the reflex, and it is wrong here: a 1ms
+     * cross-fade is not a cross-fade, it is the strip §8 explicitly forbids. What the
+     * preference asks to remove is vestibular motion — translation, parallax, zoom —
+     * and `--motion-scale` is what removes those. Opacity and color are not vestibular
+     * triggers, so they keep real durations and the reduced branch stays a design.
+     *
+     * A locked slot holding still while the others cross-fade is still legible here.
+     * That is the whole point.
+     */
+    --motion-scale: 0;
+    --duration-fast: 60ms;
+    --duration-base: 120ms;
+    --duration-slow: 200ms;
+  }
+}
