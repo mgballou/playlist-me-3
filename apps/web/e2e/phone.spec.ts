@@ -172,6 +172,80 @@ test('a change made in SHAPE is visible on the DECK one press later', async ({ p
   await expect(page.locator('.slot__title')).toHaveCount(1);
 });
 
+/**
+ * Four things do not fit on 334px of slot. The two 44px targets are WCAG 2.5.8 and telling
+ * one track from another is the deck's whole job, so the per-track running time is what goes
+ * — the one of the four with a second home, in the ledger two rows below.
+ */
+test('a track’s running time leaves the page on a phone', async ({ page }) => {
+  await page.goto('/');
+  await addFirstSource(page);
+
+  // Clipped to a pixel rather than removed, which is what keeps it for a screen reader —
+  // and which Playwright still calls "visible", so the box is what has to be read.
+  const box = await page.locator('.slot__time').first().boundingBox();
+  expect(box?.width ?? 0).toBeLessThanOrEqual(1);
+});
+
+test('that number stays in the document for a screen reader', async ({ page }) => {
+  await page.goto('/');
+  await addFirstSource(page);
+
+  await expect(page.locator('.slot__time').first()).toHaveText(/^\d+:\d\d$/);
+});
+
+test('the running time comes back above the threshold', async ({ page }) => {
+  await page.goto('/');
+  await addFirstSource(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  await expect(page.locator('.slot__time').first()).toBeVisible();
+});
+
+/**
+ * The defect this guards is **clipping early**, not clipping at all.
+ *
+ * "The Iron Cas…" at thirteen characters was the bug: two tracks an album apart became
+ * indistinguishable. A thirty-eight character title losing its last few to an ellipsis is not —
+ * by then the distinguishing part has long since read. So the invariant is that a title spends
+ * its whole allowance before giving up: anything clipped must be using both of its lines,
+ * never one.
+ *
+ * The assertion is vertical, not horizontal. A wrapped title always reports
+ * `scrollWidth === clientWidth`, so width would pass no matter how badly it clipped.
+ */
+test('a clipped title has spent both its lines first', async ({ page }) => {
+  await page.goto('/');
+  await addFirstSource(page);
+
+  const gaveUpEarly = await page.locator('.slot__title').evaluateAll((titles) =>
+    titles
+      .filter((title) => title.scrollHeight > title.clientHeight + 1)
+      .filter((title) => {
+        const leading = Number.parseFloat(getComputedStyle(title).lineHeight);
+        return Math.round(title.clientHeight / leading) < 2;
+      })
+      .map((title) => title.textContent),
+  );
+
+  expect(gaveUpEarly).toEqual([]);
+});
+
+test('a title takes at most two lines, so the row stays scannable', async ({ page }) => {
+  await page.goto('/');
+  await addFirstSource(page);
+
+  const tallest = await page.locator('.slot__title').evaluateAll((titles) => {
+    const lines = titles.map((title) => {
+      const leading = Number.parseFloat(getComputedStyle(title).lineHeight);
+      return Math.round(title.clientHeight / leading);
+    });
+    return Math.max(...lines);
+  });
+
+  expect(tallest).toBeLessThanOrEqual(2);
+});
+
 test('the deck keeps building while it is off screen', async ({ page }) => {
   await page.goto('/');
   await addFirstSource(page);

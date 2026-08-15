@@ -293,6 +293,29 @@ describe('the paged frame', () => {
     expect(declarationsFor(".key[aria-selected='true']")).not.toMatch(/var\(--accent/);
   });
 
+  /**
+   * The one thing the phone gives up, and the terms it gives it up on: the number leaves the
+   * page and stays in the document. A `display: none` here would be a deletion, and the
+   * deck's own running time in the ledger is what makes the trade payable at all.
+   */
+  it('takes a track’s running time off the page below the threshold', () => {
+    expect(declarationsFor(":root[data-collapsed='true'] .slot__time")).toMatch(
+      /clip-path:\s*inset\(50%\)/,
+    );
+  });
+
+  it('never removes that number from the document', () => {
+    expect(declarationsFor(":root[data-collapsed='true'] .slot__time")).not.toMatch(
+      /display:\s*none/,
+    );
+  });
+
+  it('hides it with the one treatment rather than a copy of it', () => {
+    expect(declarationsFor(":root[data-collapsed='true'] .slot__time")).toBe(
+      declarationsFor('.visually-hidden'),
+    );
+  });
+
   it('transitions a section change at the house duration', () => {
     expect(declarationsFor(":root[data-collapsed='true'] .panel[data-selected='true']")).toMatch(
       /animation:\s*section-in var\(--duration-base\)/,

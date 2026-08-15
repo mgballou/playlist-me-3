@@ -156,8 +156,19 @@ h4 {
   color: var(--ink-muted);
 }
 
-/* Visible to a screen reader, gone from the page. A glyph-only control keeps its name. §7 */
-.visually-hidden {
+/**
+ * Visible to a screen reader, gone from the page. A glyph-only control keeps its name. §7
+ *
+ * The second selector is that rule applied to a **measurement** rather than to a label, and
+ * it is the one place on the phone where something visible is deliberately given up: a track's
+ * own running time. Four things cannot share 334px — the two 44px targets are WCAG 2.5.8 and
+ * not tradeable, and telling one track from another is the entire job of the deck, so the
+ * duration is what goes. It is the only one of the four with a second home: the ledger carries
+ * the deck's running time permanently, two rows below (§7). The number leaves the page and
+ * stays in the document, which is what makes this a hiding rather than a deletion.
+ */
+.visually-hidden,
+:root[data-collapsed='true'] .slot__time {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -166,6 +177,26 @@ h4 {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+/**
+ * On a phone a long title takes a second line rather than an ellipsis.
+ *
+ * Reclaiming the duration bought 32px and left the longest compound titles still clipped —
+ * "Lighthouse in Hollow Orchard" wants 198px and has 142. The remaining budget was the lamp's
+ * reserved width, and spending that would let a locked slot shove its neighbours, which §14
+ * forbids by name. So the row grows instead.
+ *
+ * Clamped at two lines, not unbounded: the growth is capped, the artist line stays put, and a
+ * title long enough to need a third line is rare enough to ellipse. Telling one track from
+ * another is the deck's entire job, and a ragged row is a smaller cost than an ambiguous one.
+ */
+:root[data-collapsed='true'] .slot__title {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 /* ---------------------------------------------------------------------------
