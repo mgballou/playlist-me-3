@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "pnpm --filter @pm/web test:e2e",
+    "shots": "pnpm --filter @pm/web shots",
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "eslint . && prettier --check .",
     "fix": "eslint . --fix && prettier --write .",
