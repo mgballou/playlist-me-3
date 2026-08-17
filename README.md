@@ -170,7 +170,7 @@ testable on its own.
 171 albums, 1,123 tracks. It backs demo mode, every integration test and the whole Playwright
 suite, which is why CI needs no credentials and no network.
 
-**1,353 unit tests across 39 files, 44 end-to-end tests across two viewports.** CI runs typecheck,
+**1,383 unit tests across 39 files, 44 end-to-end tests across two viewports.** CI runs typecheck,
 lint, tests and a production build, then runs the browser suite with no secrets configured — which
 is what proves the claim that a missing `SPOTIFY_CLIENT_ID` is demo mode and not a crash.
 

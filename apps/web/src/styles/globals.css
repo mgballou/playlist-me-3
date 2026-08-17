@@ -715,12 +715,21 @@ h4 {
   min-width: 0;
 }
 
-/* The bezel: the ring the cap turns inside, machined into the panel. */
+/**
+ * The bezel: the ring the cap turns inside, machined into the panel.
+ *
+ * 88px, not the 64px it started at. §5 calls the knob the headline control, and at 64px beside
+ * a text column four times its width it read as an icon annotating a paragraph. The size is
+ * also load-bearing rather than decorative: the cap is inset from the bezel, so a 64px bezel
+ * left a **31px cap** — the part of a knob a hand actually goes for, well under the 44px WCAG
+ * 2.5.8 asks of a target. The bezel is draggable too, so the rule was never broken, but the
+ * thing that looks like the handle should be the thing you can hit.
+ */
 .knob__dial {
   position: relative;
   flex: none;
-  width: calc(var(--space-7) + var(--space-4));
-  height: calc(var(--space-7) + var(--space-4));
+  width: calc(var(--space-8) + var(--space-5));
+  height: calc(var(--space-8) + var(--space-5));
   border-radius: var(--radius-pill);
   background: var(--surface-well);
   box-shadow: var(--relief-well);
@@ -763,10 +772,12 @@ h4 {
   transition: stroke-dashoffset var(--duration-fast) var(--ease-settle);
 }
 
-/* The cap: the highest step on the desk, proud of its bezel and lit along its top edge. */
+/* The cap: the highest step on the desk, proud of its bezel and lit along its top edge.
+ * Inset 22% rather than 26%, which puts the cap at 56% of an 88px bezel — 49px, clear of the
+ * 44px target. The remaining ring is still 19px, far more than the 5px the arc strokes. */
 .knob__cap {
   position: absolute;
-  inset: 26%;
+  inset: 22%;
   border-radius: var(--radius-pill);
   background: var(--surface-top);
   box-shadow: var(--relief-raised);
@@ -809,9 +820,16 @@ h4 {
   line-height: var(--leading-tight);
 }
 
+/**
+ * The two ends of the sweep, named. The width is capped because the *distance between them is
+ * the message* — they read as the extremes of a scale, and stretched across the full rack they
+ * bracket four hundred pixels of nothing while the control they describe is eighty-eight wide.
+ * Held to a measure, they read as one label under one knob.
+ */
 .knob__ends {
   display: flex;
   justify-content: space-between;
+  max-width: 24rem;
   gap: var(--space-3);
   font-size: var(--text-xs);
   line-height: var(--leading-tight);

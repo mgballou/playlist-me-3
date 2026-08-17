@@ -353,17 +353,17 @@ it is reserved for indicators, which are never text.
 
 | Token              | Light                   | Dark                    | Job                                        |
 | ------------------ | ----------------------- | ----------------------- | ------------------------------------------ |
-| `--ground`         | `oklch(83% .008 87)`    | `oklch(19.5% .006 260)` | The desk the panels sit on.                |
-| `--surface`        | `oklch(87.9% .007 89)`  | `oklch(23% .007 258)`   | The panel.                                 |
-| `--surface-raised` | `oklch(92.2% .006 85)`  | `oklch(27.1% .009 256)` | Proud of the panel.                        |
-| `--surface-top`    | `oklch(96% .005 85)`    | `oklch(31% .01 256)`    | The highest step. Knob caps, key faces.    |
-| `--surface-well`   | `oklch(76.1% .009 85)`  | `oklch(16.8% .004 264)` | Machined into the panel. Slots, wells.     |
+| `--ground`         | `oklch(86.4% .004 87)`  | `oklch(19.5% .006 260)` | The desk the panels sit on.                |
+| `--surface`        | `oklch(91.4% .004 88)`  | `oklch(23% .007 258)`   | The panel.                                 |
+| `--surface-raised` | `oklch(94.6% .003 86)`  | `oklch(27.1% .009 256)` | Proud of the panel.                        |
+| `--surface-top`    | `oklch(97.6% .002 85)`  | `oklch(31% .01 256)`    | The highest step. Knob caps, key faces.    |
+| `--surface-well`   | `oklch(79.5% .005 86)`  | `oklch(16.8% .004 264)` | Machined into the panel. Slots, wells.     |
 | `--ink`            | `oklch(21.8% .004 264)` | `oklch(91.1% .005 248)` | Text.                                      |
-| `--ink-muted`      | `oklch(42% .007 85)`    | `oklch(60.1% .013 252)` | Secondary text. Never on a colour fill.    |
+| `--ink-muted`      | `oklch(45% .006 85)`    | `oklch(60.1% .013 252)` | Secondary text. Never on a colour fill.    |
 | `--line`           | `oklch(70% .008 85)`    | `oklch(33% .008 258)`   | **A seam, not a border.** Stays under 3:1. |
 | `--accent`         | `oklch(50% .19 27)`     | `oklch(54% .185 25)`    | **Act.** Carries white.                    |
 | `--accent-bright`  | `oklch(58% .2 27)`      | `oklch(66% .2 25)`      | Indicators. Never text.                    |
-| `--led`            | `oklch(58% .12 68)`     | `oklch(75.8% .14 73)`   | Amber. Reports, never acts.                |
+| `--led`            | `oklch(62% .15 68)`     | `oklch(75.8% .14 73)`   | Amber. Reports, never acts.                |
 | `--danger`         | `oklch(48% .17 29)`     | `oklch(54% .18 29)`     | Destructive. Never primary.                |
 
 **Source tones** (§5.1) — an even ramp 110°→313°, ~29° apart, dodging the red accent by ≥45°
