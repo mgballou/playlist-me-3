@@ -30,18 +30,30 @@
   --c-well-dark: oklch(16.8% 0.004 264);
   --c-ground-dark: oklch(19.5% 0.006 260);
 
-  --c-panel-light: oklch(87.9% 0.007 89);
-  --c-panel-light-hi: oklch(92.2% 0.006 85);
-  --c-panel-light-top: oklch(96% 0.005 85);
-  --c-well-light: oklch(76.1% 0.009 85);
-  --c-ground-light: oklch(83% 0.008 87);
+  /**
+   * The light stack sits higher and carries less chroma than it first did. At a ground of 83%
+   * with 0.008 of chroma around 87°, every panel read as a dirty beige rather than as a pale
+   * machined face: the steps between ground, panel and top were under five points of lightness,
+   * so the separation had to come from the warmth, and warmth at that lightness is mud.
+   *
+   * The fix is more room and less colour — the same five steps, spread wider, at roughly half
+   * the chroma. The hue stays warm on purpose. A neutral grey would read as a screenshot of a
+   * console; a warm one reads as a thing under a lamp.
+   */
+  --c-panel-light: oklch(91.4% 0.004 88);
+  --c-panel-light-hi: oklch(94.6% 0.003 86);
+  --c-panel-light-top: oklch(97.6% 0.002 85);
+  --c-well-light: oklch(79.5% 0.005 86);
+  --c-ground-light: oklch(86.4% 0.004 87);
 
   --c-ink-dark: oklch(91.1% 0.005 248);
   --c-dim-dark: oklch(60.1% 0.013 252);
   --c-ink-light: oklch(21.8% 0.004 264);
-  /* 42%, not the 52% the panel grey suggests: muted ink still has to clear AA body text
-   * against the light ground, and the light ground here is a mid grey, not paper. */
-  --c-dim-light: oklch(42% 0.007 85);
+  /* Was 42%, which the old mid-grey ground demanded to clear AA. On the lifted ground that
+   * bought 5.6:1 — secondary text competing with primary, which is the opposite of muted.
+   * 45% is as much relief as the 4.5 body threshold allows: 49% looked right and measured
+   * 4.15, which is the reason this file is tested rather than eyeballed. */
+  --c-dim-light: oklch(45% 0.006 85);
 
   /* One colour means act, and it is red. The fill is dark enough to carry white type;
    * the bright variant is for indicators, which are never text. */
@@ -53,7 +65,10 @@
   /* The status LED. Amber, because a console's meters are amber and because it must never
    * be mistaken for the red that means act. */
   --c-led-dark: oklch(75.8% 0.14 73);
-  --c-led-light: oklch(58% 0.12 68);
+  /* Lifting the light panels turned this brown. Amber on a pale ground is the awkward case —
+   * dark enough to read is dark enough to look like mud — so the answer is chroma, not
+   * lightness: 0.15 at 62% reads as a lit meter where 0.12 at 58% read as a stain. */
+  --c-led-light: oklch(62% 0.15 68);
 
   /* Source tones. An even ramp 110°→313°, ~29° apart. The arc dodges the red accent (25°)
    * by ≥45° and the amber LED (73°) by ≥37°, so a chip can be mistaken for neither the

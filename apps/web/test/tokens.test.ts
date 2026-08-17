@@ -305,3 +305,105 @@ describe('the cover palette is theme-invariant by construction', () => {
     );
   });
 });
+
+/**
+ * ui-sensibility §5.2 prints the palette as a table and says of it: "`tokens.css` is the source
+ * of truth. This table follows it, never the reverse." Nothing enforced that, and it drifted —
+ * seven rows went stale the moment the light stack was lifted, which is the same silent-drift
+ * failure as a screenshot nobody can re-take.
+ *
+ * So the sentence is a test now. The doc writes values in a shorthand a designer reads
+ * (`oklch(83% .008 87)`), tokens.css writes them in full (`oklch(83% 0.008 87)`), and comparing
+ * numbers rather than strings is what lets both keep their own spelling.
+ */
+describe('the palette table in ui-sensibility follows tokens.css', () => {
+  const doc = readFileSync(
+    fileURLToPath(new URL('../../../docs/ui-sensibility.md', import.meta.url)),
+    'utf8',
+  );
+
+  const ROW = /^\|\s*`(--[\w-]+)`\s*\|\s*`(oklch\([^`]+\))`\s*\|\s*`(oklch\([^`]+\))`\s*\|/gm;
+  const rows = [...doc.matchAll(ROW)].map((match) => ({
+    token: match[1] ?? '',
+    light: match[2] ?? '',
+    dark: match[3] ?? '',
+  }));
+
+  /** The three oklch components as numbers, so `.008` and `0.008` compare equal. */
+  function components(value: string): readonly number[] {
+    const match = /oklch\(\s*([\d.]+)%?\s+([\d.]+)\s+([\d.]+)\s*\)/.exec(value);
+    if (match === null) throw new Error(`not an oklch color: ${value}`);
+    return [Number(match[1]), Number(match[2]), Number(match[3])];
+  }
+
+  it('finds the table at all, so a rename cannot make this vacuous', () => {
+    expect(rows).toHaveLength(12);
+  });
+
+  it.each(rows.map((row) => [row.token, row.light, row.dark] as const))(
+    '%s matches its declaration in both themes',
+    (token, light, dark) => {
+      const declared = themeValues(token);
+      expect([components(light), components(dark)]).toEqual([
+        components(declared.light),
+        components(declared.dark),
+      ]);
+    },
+  );
+});
+
+/**
+ * The source-tone table in §5.1 is checked by **value rather than by name**. Its rows are keyed
+ * by source kind (`newReleases`), not by token (`--source-new`), and a hand-written map from one
+ * to the other would just be a second thing to keep in sync — a drift test that itself drifts.
+ * Asking instead that every printed pair is a pair the stylesheet actually declares needs no map
+ * and still fails the moment a value is edited in one place and not the other.
+ */
+describe('the source-tone table in ui-sensibility follows tokens.css', () => {
+  const doc = readFileSync(
+    fileURLToPath(new URL('../../../docs/ui-sensibility.md', import.meta.url)),
+    'utf8',
+  );
+
+  const ROW =
+    /^\|\s*`(\w+)`\s*\|\s*(\d+)\s*\|\s*`(oklch\([^`]+\))`\s*\|\s*`(oklch\([^`]+\))`\s*\|/gm;
+  const rows = [...doc.matchAll(ROW)].map((match) => ({
+    kind: match[1] ?? '',
+    hue: Number(match[2]),
+    light: match[3] ?? '',
+    dark: match[4] ?? '',
+  }));
+
+  const SOURCE_TOKENS = SEMANTIC_COLOR_TOKENS.filter((token) => token.startsWith('--source-'));
+
+  function components(value: string): string {
+    const match = /oklch\(\s*([\d.]+)%?\s+([\d.]+)\s+([\d.]+)\s*\)/.exec(value);
+    if (match === null) throw new Error(`not an oklch color: ${value}`);
+    return [Number(match[1]), Number(match[2]), Number(match[3])].join(' ');
+  }
+
+  const declared = new Set(
+    SOURCE_TOKENS.map((token) => {
+      const pair = themeValues(token);
+      return `${components(pair.light)} / ${components(pair.dark)}`;
+    }),
+  );
+
+  it('prints one row per source token', () => {
+    expect(rows).toHaveLength(SOURCE_TOKENS.length);
+  });
+
+  it.each(rows.map((row) => [row.kind, row.light, row.dark] as const))(
+    '%s is a pair tokens.css actually declares',
+    (_kind, light, dark) => {
+      expect(declared).toContain(`${components(light)} / ${components(dark)}`);
+    },
+  );
+
+  it.each(rows.map((row) => [row.kind, row.hue, row.light] as const))(
+    '%s prints the hue its own colour uses',
+    (_kind, hue, light) => {
+      expect(Number(components(light).split(' ')[2])).toBe(hue);
+    },
+  );
+});
