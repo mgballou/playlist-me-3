@@ -1,0 +1,300 @@
+{
+  "project": "playlist-me",
+  "base_url": "http://localhost:3100",
+  "viewport": {
+    "width": 430,
+    "height": 932
+  },
+  "hide": [
+    "nextjs-portal",
+    "next-route-announcer",
+    "#__next-build-watcher",
+    "[data-nextjs-toast]",
+    "[data-next-badge-root]"
+  ],
+  "notes": [
+    "Demo mode needs no Spotify account and no credentials, and it is the default. With no SPOTIFY_CLIENT_ID and no SESSION_SECRET set, the app runs against the invented catalog in packages/spotify/src/fixtures.ts. Do not create a .env.local before a review run.",
+    "The app is one route. Every screen below is '/'; the four sections (Sources, Block, Shape, Deck) are client state behind the key row, so all but the first two carry a '?r=' recipe and a key press in their actions.",
+    "A fresh browser context is empty: Sources 0, Deck '-', 'nothing built yet'. Nothing but the empty bench photographs as anything until a recipe is loaded, which is why the actions lists exist.",
+    "SCREEN ORDER MATTERS. 'bench-empty' and 'source-kinds' must run before any '?r=' screen. The harness reuses one page for the whole run and the app writes its place to IndexedDB, so once a recipe has loaded, plain '/' restores that recipe instead of the first-run bench.",
+    "The '?r=' payload carries the recipe 'Night Drive': sources My library and artist ar-001, one block (playlist pl-kids-jams), 25 tracks, at most 2 per artist. The fixture ids are stable across runs.",
+    "Track order is NOT stable between runs. A shared link mints a fresh seed on open, so the same recipe yields a different 25 and a different running time. Counts, shape and layout repeat; titles do not. Do not diff deck screenshots.",
+    "FINDING - a share link shows raw ids. On the block screen the blocked playlist reads 'pl-kids-jams', not 'Kids Jams'. Friendly names live in an IndexedDB 'names' map that the link does not carry, so anything arriving by link is labeled with its fixture id. Same for an artist source added this way.",
+    "FINDING - the shelf is unusable with the deck scrolled. Scroll the deck to its foot and open the shelf: the ledger bar and the key row paint over the middle of the shelf panel, the lower half of the viewport goes blank, and 'Keep this recipe' cannot be pressed at all. Captured as the 'shelf-blocked' screen. Reproduced at 430x932 every run.",
+    "FINDING - the auth routes redirect to states nothing renders. GET /api/auth/login returns 307 to '/?connect=unavailable' and GET /api/auth/callback returns 307 to '/?auth=notConfigured'. Both render the plain empty bench with no notice of any kind; no client code reads either parameter. In demo mode these are silent dead ends.",
+    "GET / returns 200 and is the only page. Any other path returns 404. GET /api/auth/logout returns 405 (it takes POST, which returns 303 to '/'). None of the api routes render UI and none are reviewable.",
+    "The dev server logs one console error on every load: GET /favicon.ico 404. The app ships no favicon. Cosmetic, present on every screen, not a per-screen finding.",
+    "The takeovers (Save, Shelf) are native <dialog> elements. They match the selector 'dialog', not '[role=\"dialog\"]', and the shelf is opened non-modally, which is why the ledger can paint over it."
+  ],
+  "screens": [
+    {
+      "name": "bench-empty",
+      "path": "/",
+      "note": "Only reachable on a first visit, before any recipe is loaded. Must run first in the spec; see notes.",
+      "question": "Does the empty bench tell you what to do first?",
+      "answers": ["clear", "vague", "unsure"]
+    },
+    {
+      "name": "source-kinds",
+      "path": "/",
+      "setup": "The bench holds nothing until it is driven. Press ADD A SOURCE to open the eight source kinds.",
+      "actions": [
+        {
+          "click": "#section-panel-sources button:has-text(\"Add a source\")"
+        },
+        {
+          "wait_for": "#section-panel-sources button:has-text(\"My library\")"
+        },
+        {
+          "wait_ms": 400
+        }
+      ],
+      "question": "Are the eight source kinds easy to tell apart?",
+      "answers": ["easy", "muddled", "unsure"]
+    },
+    {
+      "name": "sources",
+      "path": "/?r=eyJ2IjoxLCJpIjoiODIwN2ZlODgtNDc0OS00NWY2LWEzNGYtYzc5MTM2ZGZkN2FhIiwibiI6Ik5pZ2h0IERyaXZlIiwicyI6W1s0XSxbMCwiYXItMDAxIiwxXV0sIngiOltbMSwicGwta2lkcy1qYW1zIl1dLCJoIjpbMCwyNSwyLDAsMC41LDAuNV19",
+      "setup": "Loads the Night Drive recipe from its share link. Two sources, resolved against the demo catalog.",
+      "actions": [
+        {
+          "wait_for": "#section-panel-sources li"
+        },
+        {
+          "wait_ms": 1200
+        }
+      ],
+      "question": "Can you see what each source gave the pool?",
+      "answers": ["yes", "no", "unsure"]
+    },
+    {
+      "name": "block",
+      "path": "/?r=eyJ2IjoxLCJpIjoiODIwN2ZlODgtNDc0OS00NWY2LWEzNGYtYzc5MTM2ZGZkN2FhIiwibiI6Ik5pZ2h0IERyaXZlIiwicyI6W1s0XSxbMCwiYXItMDAxIiwxXV0sIngiOltbMSwicGwta2lkcy1qYW1zIl1dLCJoIjpbMCwyNSwyLDAsMC41LDAuNV19",
+      "setup": "Presses the BLOCK key. The recipe blocks the Kids Jams playlist, which is the headline feature.",
+      "actions": [
+        {
+          "click": "#section-key-block"
+        },
+        {
+          "wait_for": "#section-panel-block li"
+        },
+        {
+          "wait_ms": 1200
+        }
+      ],
+      "question": "Is it clear what the block took out?",
+      "answers": ["clear", "unclear", "unsure"]
+    },
+    {
+      "name": "block-picker",
+      "path": "/?r=eyJ2IjoxLCJpIjoiODIwN2ZlODgtNDc0OS00NWY2LWEzNGYtYzc5MTM2ZGZkN2FhIiwibiI6Ik5pZ2h0IERyaXZlIiwicyI6W1s0XSxbMCwiYXItMDAxIiwxXV0sIngiOltbMSwicGwta2lkcy1qYW1zIl1dLCJoIjpbMCwyNSwyLDAsMC41LDAuNV19",
+      "setup": "Opens the playlist chooser, which lists the three demo playlists. Reachable only from BLOCK > Block something > Anything off a playlist.",
+      "actions": [
+        {
+          "click": "#section-key-block"
+        },
+        {
+          "wait_ms": 900
+        },
+        {
+          "click": "#section-panel-block button:has-text(\"Block something\")"
+        },
+        {
+          "click": "#section-panel-block button:has-text(\"Anything off a playlist\")"
+        },
+        {
+          "wait_for": "#section-panel-block button:has-text(\"Kids Jams\")"
+        },
+        {
+          "wait_ms": 500
+        }
+      ],
+      "question": "Is it obvious these playlists are invented demo data?",
+      "answers": ["obvious", "hidden", "unsure"]
+    },
+    {
+      "name": "shape",
+      "path": "/?r=eyJ2IjoxLCJpIjoiODIwN2ZlODgtNDc0OS00NWY2LWEzNGYtYzc5MTM2ZGZkN2FhIiwibiI6Ik5pZ2h0IERyaXZlIiwicyI6W1s0XSxbMCwiYXItMDAxIiwxXV0sIngiOltbMSwicGwta2lkcy1qYW1zIl1dLCJoIjpbMCwyNSwyLDAsMC41LDAuNV19",
+      "setup": "Presses the SHAPE key. Two dials, a length target and an order strategy.",
+      "actions": [
+        {
+          "click": "#section-key-shape"
+        },
+        {
+          "wait_for": "#section-panel-shape [role=\"slider\"]"
+        },
+        {
+          "wait_ms": 900
+        }
+      ],
+      "question": "Do the two dials say what they actually do?",
+      "answers": ["yes", "no", "unsure"]
+    },
+    {
+      "name": "deck",
+      "path": "/?r=eyJ2IjoxLCJpIjoiODIwN2ZlODgtNDc0OS00NWY2LWEzNGYtYzc5MTM2ZGZkN2FhIiwibiI6Ik5pZ2h0IERyaXZlIiwicyI6W1s0XSxbMCwiYXItMDAxIiwxXV0sIngiOltbMSwicGwta2lkcy1qYW1zIl1dLCJoIjpbMCwyNSwyLDAsMC41LDAuNV19",
+      "setup": "Presses the DECK key. Twenty-five built slots, each with a lock and a reject.",
+      "actions": [
+        {
+          "click": "#section-key-deck"
+        },
+        {
+          "wait_for": "#section-panel-deck li.slot"
+        },
+        {
+          "wait_ms": 1200
+        }
+      ],
+      "question": "At this width, is the track list readable?",
+      "answers": ["readable", "cramped", "unsure"]
+    },
+    {
+      "name": "why-these",
+      "path": "/?r=eyJ2IjoxLCJpIjoiODIwN2ZlODgtNDc0OS00NWY2LWEzNGYtYzc5MTM2ZGZkN2FhIiwibiI6Ik5pZ2h0IERyaXZlIiwicyI6W1s0XSxbMCwiYXItMDAxIiwxXV0sIngiOltbMSwicGwta2lkcy1qYW1zIl1dLCJoIjpbMCwyNSwyLDAsMC41LDAuNV19",
+      "setup": "Opens the Why these disclosure at the foot of the deck. Collapsed on load, so it photographs as nothing without this.",
+      "actions": [
+        {
+          "click": "#section-key-deck"
+        },
+        {
+          "wait_for": "#section-panel-deck li.slot"
+        },
+        {
+          "wait_ms": 800
+        },
+        {
+          "scroll_to": "#section-panel-deck .reveal__toggle"
+        },
+        {
+          "click": "#section-panel-deck .reveal__toggle"
+        },
+        {
+          "wait_ms": 700
+        }
+      ],
+      "question": "Does the report explain why these tracks were chosen?",
+      "answers": ["yes", "no", "unsure"]
+    },
+    {
+      "name": "save",
+      "path": "/?r=eyJ2IjoxLCJpIjoiODIwN2ZlODgtNDc0OS00NWY2LWEzNGYtYzc5MTM2ZGZkN2FhIiwibiI6Ik5pZ2h0IERyaXZlIiwicyI6W1s0XSxbMCwiYXItMDAxIiwxXV0sIngiOltbMSwicGwta2lkcy1qYW1zIl1dLCJoIjpbMCwyNSwyLDAsMC41LDAuNV19",
+      "setup": "Opens the save takeover. Only reachable once a deck is built; the button is disabled while nothing is built.",
+      "actions": [
+        {
+          "wait_for": "footer button:has-text(\"Save to Spotify\")"
+        },
+        {
+          "wait_ms": 800
+        },
+        {
+          "click": "footer button:has-text(\"Save to Spotify\")"
+        },
+        {
+          "wait_for": "dialog button:has-text(\"Run the write\")"
+        },
+        {
+          "wait_ms": 600
+        }
+      ],
+      "question": "Is it clear that nothing reaches Spotify here?",
+      "answers": ["clear", "unclear", "unsure"]
+    },
+    {
+      "name": "save-done",
+      "path": "/?r=eyJ2IjoxLCJpIjoiODIwN2ZlODgtNDc0OS00NWY2LWEzNGYtYzc5MTM2ZGZkN2FhIiwibiI6Ik5pZ2h0IERyaXZlIiwicyI6W1s0XSxbMCwiYXItMDAxIiwxXV0sIngiOltbMSwicGwta2lkcy1qYW1zIl1dLCJoIjpbMCwyNSwyLDAsMC41LDAuNV19",
+      "setup": "Runs the write against the demo catalog. Only reachable after pressing Run the write in the save takeover.",
+      "actions": [
+        {
+          "wait_for": "footer button:has-text(\"Save to Spotify\")"
+        },
+        {
+          "wait_ms": 800
+        },
+        {
+          "click": "footer button:has-text(\"Save to Spotify\")"
+        },
+        {
+          "wait_for": "dialog button:has-text(\"Run the write\")"
+        },
+        {
+          "click": "dialog button:has-text(\"Run the write\")"
+        },
+        {
+          "wait_for": "dialog button:has-text(\"Back to the bench\")"
+        },
+        {
+          "wait_ms": 700
+        }
+      ],
+      "question": "Does the result say plainly what it did?",
+      "answers": ["yes", "no", "unsure"]
+    },
+    {
+      "name": "shelf",
+      "path": "/?r=eyJ2IjoxLCJpIjoiODIwN2ZlODgtNDc0OS00NWY2LWEzNGYtYzc5MTM2ZGZkN2FhIiwibiI6Ik5pZ2h0IERyaXZlIiwicyI6W1s0XSxbMCwiYXItMDAxIiwxXV0sIngiOltbMSwicGwta2lkcy1qYW1zIl1dLCJoIjpbMCwyNSwyLDAsMC41LDAuNV19",
+      "setup": "Resets to SOURCES first, then opens the shelf and keeps the recipe. The reset is required: with the deck left scrolled, the ledger covers the shelf and the keep cannot be pressed. See shelf-blocked.",
+      "actions": [
+        {
+          "click": "#section-key-sources"
+        },
+        {
+          "wait_for": "#section-panel-sources li"
+        },
+        {
+          "wait_ms": 800
+        },
+        {
+          "click": "footer button:has-text(\"Shelf\")"
+        },
+        {
+          "wait_for": "dialog button:has-text(\"Keep this recipe\")"
+        },
+        {
+          "click": "dialog button:has-text(\"Keep this recipe\")"
+        },
+        {
+          "wait_for": "dialog button:has-text(\"Load\")"
+        },
+        {
+          "wait_ms": 600
+        }
+      ],
+      "question": "Would you recognize this recipe on the shelf later?",
+      "answers": ["yes", "no", "unsure"]
+    },
+    {
+      "name": "shelf-blocked",
+      "path": "/?r=eyJ2IjoxLCJpIjoiODIwN2ZlODgtNDc0OS00NWY2LWEzNGYtYzc5MTM2ZGZkN2FhIiwibiI6Ik5pZ2h0IERyaXZlIiwicyI6W1s0XSxbMCwiYXItMDAxIiwxXV0sIngiOltbMSwicGwta2lkcy1qYW1zIl1dLCJoIjpbMCwyNSwyLDAsMC41LDAuNV19",
+      "note": "A defect, captured on purpose. Only reachable with the DECK section scrolled to its foot; from any other section the shelf draws correctly.",
+      "setup": "Scrolls the deck to the bottom, then opens the shelf. The ledger bar and the key row paint across the middle of the shelf panel and the lower half of the viewport goes blank.",
+      "actions": [
+        {
+          "click": "#section-key-deck"
+        },
+        {
+          "wait_for": "#section-panel-deck li.slot"
+        },
+        {
+          "wait_ms": 800
+        },
+        {
+          "scroll_to": "#section-panel-deck .reveal__toggle"
+        },
+        {
+          "wait_ms": 600
+        },
+        {
+          "click": "footer button:has-text(\"Shelf\")"
+        },
+        {
+          "wait_for": "dialog button:has-text(\"Keep this recipe\")"
+        },
+        {
+          "wait_ms": 600
+        }
+      ],
+      "question": "Is anything covering the shelf panel here?",
+      "answers": ["covered", "clear", "unsure"]
+    }
+  ]
+}
