@@ -26,7 +26,7 @@ import { statesMatch } from '@/lib/auth/pkce';
 import { sealSession, sessionFromGrant } from '@/lib/auth/session';
 import { exchangeCode } from '@/lib/auth/tokens';
 import { AuthHandoffFailed } from '@/lib/errors/auth';
-import { isSecureOrigin, readSpotifyEnv } from '@/lib/env';
+import { isSecureOrigin, readSpotifyEnv, redirectUriFor } from '@/lib/env';
 
 function withHandoffCleared(response: NextResponse, secure: boolean): NextResponse {
   const cleared = clearedCookieOptions(secure);
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const exchanged = await exchangeCode({
     clientId: reading.env.clientId,
-    redirectUri: reading.env.redirectUri,
+    redirectUri: redirectUriFor(reading.env, origin),
     code,
     verifier,
   });

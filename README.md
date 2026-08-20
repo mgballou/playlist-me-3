@@ -257,8 +257,10 @@ instead of turning up in a screenshot._
 _The highest-leverage screen in the app, and the one most often left blank. Every terminal state
 names the next thing to do._
 
-**Not done:** a deployment. The app is credential-free and builds clean, so it is ready to go up;
-the link will land here when it does.
+**Not done:** a deployment. There is no hosted copy, and no link to one. The build is green and
+`vercel.json` points a host at `apps/web`, so what is left is account work — a Spotify app, a
+session secret, and the callback URL registered on Spotify's dashboard.
+[`docs/deploy-readiness.md`](docs/deploy-readiness.md) lists what remains, in order.
 
 ---
 

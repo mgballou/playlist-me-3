@@ -116,7 +116,7 @@ describe('the token provider', () => {
   const env = {
     clientId: 'client-id',
     sessionSecret: CONFIGURED.SESSION_SECRET,
-    redirectUri: 'http://x/cb',
+    configuredRedirectUri: 'http://x/cb',
   };
   const nearlyExpired: Session = { ...session, expiresAt: NOW + 1000 };
 

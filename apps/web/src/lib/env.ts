@@ -12,13 +12,18 @@ export type EnvSource = Readonly<Record<string, string | undefined>>;
 /** `openssl rand -base64 32` gives 44 characters. Anything under this is not a secret. */
 export const MIN_SESSION_SECRET_LENGTH = 32;
 
-/** Matches the redirect URI the README tells you to register. */
-export const DEFAULT_REDIRECT_URI = 'http://localhost:3000/api/auth/callback';
+/** Where the callback route handler lives. Written down once, resolved against an origin. */
+export const CALLBACK_PATH = '/api/auth/callback';
 
 export type SpotifyEnv = {
   readonly clientId: string;
   readonly sessionSecret: string;
-  readonly redirectUri: string;
+  /**
+   * `SPOTIFY_REDIRECT_URI` verbatim, empty when it is unset. Read it through
+   * `redirectUriFor`, never directly: an empty value is not an error, it means "wherever this
+   * request arrived".
+   */
+  readonly configuredRedirectUri: string;
 };
 
 export type DemoReason = 'noClientId' | 'noSessionSecret' | 'sessionSecretTooShort';
@@ -42,15 +47,28 @@ export function readSpotifyEnv(source: EnvSource = process.env): EnvReading {
 
   if (reasons.length > 0) return { kind: 'demo', reasons };
 
-  const redirectUri = trimmed(source, 'SPOTIFY_REDIRECT_URI');
   return {
     kind: 'configured',
     env: {
       clientId,
       sessionSecret,
-      redirectUri: redirectUri.length === 0 ? DEFAULT_REDIRECT_URI : redirectUri,
+      configuredRedirectUri: trimmed(source, 'SPOTIFY_REDIRECT_URI'),
     },
   };
+}
+
+/**
+ * The redirect URI for a request, and the only place it is decided.
+ *
+ * `SPOTIFY_REDIRECT_URI` wins whenever it is set, because Spotify matches the string exactly
+ * and a registered URI can differ from the origin a request arrived on — a custom domain in
+ * front of a deployment, say. With nothing set, the origin in hand is the answer. It is never
+ * a hardcoded host: a deployment that hardcodes localhost sends people to Spotify asking to
+ * be sent back to a machine that is not there, and reports itself configured while doing it.
+ */
+export function redirectUriFor(env: SpotifyEnv, origin: string): string {
+  if (env.configuredRedirectUri.length > 0) return env.configuredRedirectUri;
+  return new URL(CALLBACK_PATH, origin).toString();
 }
 
 /** One line a person can act on, for each way the environment falls short. */

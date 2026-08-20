@@ -20,7 +20,7 @@ import {
 } from '@/lib/auth/cookies';
 import { challengeOf, createState, createVerifier } from '@/lib/auth/pkce';
 import { authorizeUrl } from '@/lib/auth/tokens';
-import { isSecureOrigin, readSpotifyEnv } from '@/lib/env';
+import { isSecureOrigin, readSpotifyEnv, redirectUriFor } from '@/lib/env';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const origin = request.nextUrl.origin;
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const response = NextResponse.redirect(
     authorizeUrl({
       clientId: reading.env.clientId,
-      redirectUri: reading.env.redirectUri,
+      redirectUri: redirectUriFor(reading.env, origin),
       state,
       challenge,
     }),
