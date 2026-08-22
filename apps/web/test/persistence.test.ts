@@ -1,5 +1,13 @@
 import type { Recipe } from '@pm/core';
-import { artistId, clampDial, defaultRecipe, playlistId, recipeId } from '@pm/core';
+import {
+  artistId,
+  clampDial,
+  defaultRecipe,
+  encodeRecipe,
+  playlistId,
+  recipeId,
+  trackId,
+} from '@pm/core';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -9,8 +17,8 @@ import {
   listRecipes,
   loadPlace,
   loadRecipe,
-  recipeFromSearch,
-  recipeSearchParam,
+  shareFromSearch,
+  shareSearchParam,
   savePlace,
   saveRecipe,
 } from '@/lib/persistence/recipes';
@@ -118,17 +126,44 @@ describe('export and import', () => {
 });
 
 describe('the shared link', () => {
+  const share = () => ({
+    recipe: recipe(),
+    seed: 4242,
+    locks: [{ index: 2, trackId: trackId('tr-9') }],
+    poolStamp: 'abc123',
+  });
+
   it('carries the whole recipe', () => {
-    const decoded = recipeFromSearch(`?${recipeSearchParam(recipe())}`);
-    expect(decoded?.ok === true ? decoded.value.sources : null).toEqual(recipe().sources);
+    const decoded = shareFromSearch(`?${shareSearchParam(share())}`);
+    expect(decoded?.ok === true ? decoded.value.recipe.sources : null).toEqual(recipe().sources);
+  });
+
+  it('carries the seed', () => {
+    const decoded = shareFromSearch(`?${shareSearchParam(share())}`);
+    expect(decoded?.ok === true ? decoded.value.seed : null).toBe(4242);
+  });
+
+  it('carries the locks', () => {
+    const decoded = shareFromSearch(`?${shareSearchParam(share())}`);
+    expect(decoded?.ok === true ? decoded.value.locks : null).toEqual(share().locks);
+  });
+
+  it('carries the stamp of the pool it was built from', () => {
+    const decoded = shareFromSearch(`?${shareSearchParam(share())}`);
+    expect(decoded?.ok === true ? decoded.value.poolStamp : null).toBe('abc123');
+  });
+
+  it('reads a recipe-only string with no seed', () => {
+    const decoded = shareFromSearch(`?r=${encodeRecipe(recipe())}`);
+    expect(decoded?.ok === true ? decoded.value.seed : 'unread').toBeNull();
   });
 
   it('is nothing at all when the URL carries no recipe', () => {
-    expect(recipeFromSearch('?other=1')).toBeNull();
+    expect(shareFromSearch('?other=1')).toBeNull();
   });
 
   it('reports a damaged link rather than throwing', () => {
-    const decoded = recipeFromSearch('?r=%%%not-a-recipe');
+    const decoded = shareFromSearch('?r=%%%not-a-recipe');
     expect(decoded?.ok).toBe(false);
   });
 });

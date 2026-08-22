@@ -5,9 +5,11 @@ import {
   RECIPE_SCHEMA_VERSION,
   artistId,
   decodeRecipe,
+  decodeShare,
   defaultRecipe,
   dial,
   encodeRecipe,
+  encodeShare,
   playlistId,
   recipeId,
   trackId,
@@ -134,6 +136,64 @@ describe('the encoded form', () => {
   it('is stable for the same recipe', () => {
     const recipe = makeRecipe({ sources: everySource });
     expect(encodeRecipe(recipe)).toBe(encodeRecipe(recipe));
+  });
+});
+
+describe('the shared deck', () => {
+  const shared = {
+    recipe: makeRecipe({ sources: everySource, exclusions: everyExclusion }),
+    seed: 1_234_567_890,
+    locks: [
+      { index: 0, trackId: trackId('0eGsygTp906u18L0Oimnem') },
+      { index: 7, trackId: trackId('3TVXtAsR1Inumwj472S9r4') },
+    ],
+    poolStamp: 'x8f2ab',
+  } as const;
+
+  const roundTripShare = () => {
+    const result = decodeShare(encodeShare(shared));
+    if (!result.ok) throw result.error;
+    return result.value;
+  };
+
+  it('brings the seed back', () => {
+    expect(roundTripShare().seed).toBe(shared.seed);
+  });
+
+  it('brings the locks back', () => {
+    expect(roundTripShare().locks).toEqual(shared.locks);
+  });
+
+  it('brings the pool stamp back', () => {
+    expect(roundTripShare().poolStamp).toBe(shared.poolStamp);
+  });
+
+  it('brings the recipe back', () => {
+    expect(roundTripShare().recipe).toEqual(shared.recipe);
+  });
+
+  it('reads a recipe-only string, with no seed', () => {
+    const result = decodeShare(encodeRecipe(shared.recipe));
+    expect(result.ok ? result.value.seed : 'unread').toBeNull();
+  });
+
+  it('reads a recipe-only string as having no locks', () => {
+    const result = decodeShare(encodeRecipe(shared.recipe));
+    expect(result.ok ? result.value.locks : null).toEqual([]);
+  });
+
+  /**
+   * The deck rides in a URL, so its size is a design constraint rather than a detail. The
+   * seed and the stamp cost a flat ~47 characters; each lock costs ~33, because a Spotify
+   * id is 22 characters and base64 charges four for every three. This pins the ceiling for
+   * a recipe larger than anyone builds by hand.
+   */
+  it('leaves a large deck short enough to paste anywhere', () => {
+    const locks = Array.from({ length: 12 }, (_, index) => ({
+      index,
+      trackId: trackId(`0eGsygTp906u18L0Oimn${String(index).padStart(2, '0')}`),
+    }));
+    expect(encodeShare({ ...shared, locks }).length).toBeLessThan(2000);
   });
 });
 

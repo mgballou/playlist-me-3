@@ -40,7 +40,9 @@ network. The locked slot holding still while the rest turn over is the whole dem
 recipe plus a seed reproduces a playlist exactly.
 
 Recipes save to your browser, export as JSON, and encode into a shareable link. A link carries the
-recipe and the seed, which is the whole playlist. There is no database.
+recipe, the seed and the locks — the deck itself, so two people open it and see the same playlist.
+It also carries a stamp of the pool it was built from: when the sources have moved since the link
+was made, the deck says it was rebuilt rather than reproduced. There is no database.
 
 ### On a phone
 
@@ -71,6 +73,8 @@ copy above was opaque, this is the decoder ring.
 | **Pool**      | Every track the sources resolved to, before shaping. Resolving costs requests; shaping costs nothing.                 | `TrackPool` — `core/src/domain.ts`      |
 | **Deck**      | The playlist as it currently stands, and the only thing that gets written to Spotify.                                 | `BuildResult` — `core/src/build.ts`     |
 | **Seed**      | One number. A recipe plus a seed is a complete description of a playlist, which is the entire share-by-link feature.  | `BuildInput.seed` — `core/src/build.ts` |
+| **Link**      | A recipe, a seed, the locks and a stamp of the pool, in one base64url string. Opened twice, it gives the same deck.   | `encodeShare` — `core/src/serialize.ts` |
+| **Stamp**     | A fingerprint of the pool a deck was built from. What lets a link tell a reproduced deck from a rebuilt one.          | `poolStamp` — `core/src/domain.ts`      |
 | **Lock**      | A track pinned to a slot index. Resolved twice: for membership in `select`, for position after `order`.               | `Lock` — `core/src/domain.ts`           |
 | **Re-roll**   | The same `build` call with a new seed and the same locks. There is no second selection path.                          | `build` — `core/src/build.ts`           |
 | **Familiar**  | Whether a track is in your library, your top tracks or your recent plays. Set membership, so it is exact.             | `familiarityOf` — `core/src/score.ts`   |

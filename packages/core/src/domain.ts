@@ -102,6 +102,28 @@ export type Lock = {
   readonly trackId: TrackId;
 };
 
+/**
+ * A short fingerprint of the pool a deck was built from, in order.
+ *
+ * A seed reproduces a deck only against the same pool: the same recipe resolved a month
+ * later can return different tracks, and then the same seed lands somewhere else. The
+ * stamp is what lets a shared link tell the difference between a deck it reproduced and
+ * a deck it rebuilt, rather than claiming the first and delivering the second.
+ *
+ * Thirty-two bits, order-sensitive, and it travels in a URL — so this is a collision
+ * check, not a hash anyone should lean on for anything else.
+ */
+export function poolStamp(pool: TrackPool): string {
+  let hash = 0x811c9dc5;
+  for (const track of pool) {
+    for (let i = 0; i < track.id.length; i += 1) {
+      hash = Math.imul(hash ^ track.id.charCodeAt(i), 0x01000193);
+    }
+    hash = Math.imul(hash ^ 0x2c, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}
+
 export function poolSize(pool: TrackPool): number {
   return pool.length;
 }

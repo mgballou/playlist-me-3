@@ -18,7 +18,7 @@
  */
 
 import type { BuildResult, Lock, Recipe, TrackId, TrackPool } from '@pm/core';
-import { build, defaultRecipe, recipeId } from '@pm/core';
+import { build, defaultRecipe, poolStamp, recipeId } from '@pm/core';
 import type { ResolveReport } from '@pm/spotify';
 import {
   createContext,
@@ -37,7 +37,7 @@ import type { ErrorSurface } from '../errors/surface';
 import type { KeyValueStore } from '../persistence/store';
 import { browserStore } from '../persistence/store';
 import { loadNames, saveNames } from '../persistence/names';
-import { loadPlace, recipeFromSearch, savePlace } from '../persistence/recipes';
+import { loadPlace, savePlace, shareFromSearch } from '../persistence/recipes';
 import type { ContextPayload } from './resolve-request';
 import {
   EMPTY_CONTEXT_PAYLOAD,
@@ -56,6 +56,15 @@ const INITIAL_SEED = 1;
 
 export type WorkbenchStatus = 'empty' | 'resolving' | 'ready' | 'failed';
 
+/**
+ * What a shared link actually delivered. A seed reproduces a deck only against the pool it
+ * was built from, and sources move: an artist releases a record, a playlist is edited, a
+ * search returns something new. `exact` means the pool stamp matched and this is the deck
+ * that was shared. `rebuilt` means it did not, so this is the same recipe over a pool that
+ * has changed — the app says so rather than letting the difference pass as the real thing.
+ */
+export type Reproduction = 'exact' | 'rebuilt';
+
 export type WorkbenchState = {
   readonly recipe: Recipe;
   readonly seed: number;
@@ -73,6 +82,8 @@ export type WorkbenchState = {
   readonly restored: boolean;
   /** Human names for the ids the recipe holds. Presentation only — see persistence/names. */
   readonly names: ReadonlyMap<string, string>;
+  /** Null unless this bench was opened from a link that carried a deck. */
+  readonly reproduction: Reproduction | null;
   /**
    * Seconds until the workbench re-issues a rate-limited resolve by itself, or null when
    * nothing is waiting. This is what makes §9's *"say how many, and retry automatically"*
@@ -117,6 +128,7 @@ export function useWorkbenchState(): Workbench {
   const [restored, setRestored] = useState(false);
   const [names, setNames] = useState<ReadonlyMap<string, string>>(() => new Map());
   const [attempt, setAttempt] = useState(0);
+  const [sharedStamp, setSharedStamp] = useState<string | null>(null);
   const [retryIn, setRetryIn] = useState<number | null>(null);
 
   const storeRef = useRef<KeyValueStore | null>(null);
@@ -130,11 +142,15 @@ export function useWorkbenchState(): Workbench {
       const held = await loadNames(store()).catch(() => new Map<string, string>());
       if (!cancelled && held.size > 0) setNames(held);
 
-      const shared = recipeFromSearch(window.location.search);
+      const shared = shareFromSearch(window.location.search);
       if (shared !== null && shared.ok) {
         if (!cancelled) {
-          setRecipeState(shared.value);
-          setSeed(mintSeed());
+          setRecipeState(shared.value.recipe);
+          // The seed and the locks are the deck. A link without them was a link to a
+          // different playlist on every load, which is the bug this branch exists to fix.
+          setSeed(shared.value.seed ?? mintSeed());
+          setLocks(shared.value.locks);
+          setSharedStamp(shared.value.poolStamp);
           setRestored(true);
         }
         return;
@@ -246,6 +262,15 @@ export function useWorkbenchState(): Workbench {
     };
   }, [error, key]);
 
+  /**
+   * Held only until the person changes something. Editing the recipe or re-rolling means
+   * this is their deck now, and a notice about what a link delivered has stopped being true.
+   */
+  const reproduction = useMemo<Reproduction | null>(() => {
+    if (sharedStamp === null || pool.length === 0) return null;
+    return poolStamp(pool) === sharedStamp ? 'exact' : 'rebuilt';
+  }, [sharedStamp, pool]);
+
   const engineContext = useMemo(() => toEngineContext(context), [context]);
 
   /** Pure, local, instant. No network is involved and nothing may pretend otherwise. §2.10 */
@@ -256,10 +281,12 @@ export function useWorkbenchState(): Workbench {
 
   const setRecipe = useCallback((next: Recipe) => {
     setRecipeState(next);
+    setSharedStamp(null);
   }, []);
 
   const reroll = useCallback(() => {
     setSeed(mintSeed());
+    setSharedStamp(null);
   }, []);
 
   const lockTrack = useCallback((lock: Lock) => {
@@ -311,6 +338,7 @@ export function useWorkbenchState(): Workbench {
     result,
     restored,
     names,
+    reproduction,
     retryIn,
     setRecipe,
     reroll,

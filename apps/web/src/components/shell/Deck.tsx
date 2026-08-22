@@ -57,6 +57,7 @@ export function Deck() {
     rejects,
     names,
     retryIn,
+    reproduction,
     reroll,
     lockTrack,
     unlockTrack,
@@ -164,6 +165,13 @@ export function Deck() {
                 />
               ))}
             </ul>
+
+            {reproduction === 'rebuilt' ? (
+              <p className="deck__short" role="status">
+                The sources have changed since this link was made, so this is the recipe rebuilt,
+                not the deck that was shared. Re-roll to make it yours.
+              </p>
+            ) : null}
 
             {result.report.canReachTarget ? null : (
               <p className="deck__short" role="status">

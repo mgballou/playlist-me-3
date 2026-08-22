@@ -9,11 +9,12 @@
  *
  * There is no database and there will not be one (spec §6). A recipe is a small declarative
  * value, so the shelf is IndexedDB, the export is a JSON file, and a shared link carries the
- * whole recipe through `encodeRecipe` — no server, no account, no row to migrate.
+ * whole recipe **and the deck built from it** through `encodeShare` — no server, no
+ * account, no row to migrate.
  */
 
 import type { Recipe } from '@pm/core';
-import { decodeRecipe, recipeId } from '@pm/core';
+import { decodeRecipe, poolStamp, recipeId } from '@pm/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { CoverArt } from '@/components/cover/CoverArt';
@@ -25,8 +26,8 @@ import {
   exportRecipes,
   importRecipes,
   listRecipes,
-  recipeSearchParam,
   saveRecipe,
+  shareSearchParam,
 } from '@/lib/persistence/recipes';
 import { browserStore } from '@/lib/persistence/store';
 import { useWorkbench } from '@/lib/workbench/use-workbench';
@@ -42,7 +43,7 @@ type ShelfEntry = {
 };
 
 export function Shelf({ onClose }: ShelfProps) {
-  const { recipe, setRecipe, resetTinkering } = useWorkbench();
+  const { recipe, seed, locks, pool, setRecipe, resetTinkering } = useWorkbench();
   const [entries, setEntries] = useState<readonly ShelfEntry[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -66,11 +67,12 @@ export function Shelf({ onClose }: ShelfProps) {
   };
 
   const share = (): void => {
-    const url = `${window.location.origin}${window.location.pathname}?${recipeSearchParam(recipe)}`;
+    const share = shareSearchParam({ recipe, seed, locks, poolStamp: poolStamp(pool) });
+    const url = `${window.location.origin}${window.location.pathname}?${share}`;
     void navigator.clipboard
       .writeText(url)
       .then(() => {
-        setMessage('Link copied. It carries the whole recipe — no account, no server.');
+        setMessage('Link copied. It carries the recipe and this deck — no account, no server.');
       })
       .catch(() => {
         setMessage(url);

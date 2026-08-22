@@ -30,7 +30,7 @@ export type {
   Track,
   TrackPool,
 } from './domain';
-export { emptyContext, poolSize, totalDurationMs } from './domain';
+export { emptyContext, poolSize, poolStamp, totalDurationMs } from './domain';
 
 export type {
   CatalogDepth,
@@ -94,7 +94,8 @@ export { build, canReachTarget } from './build';
 export type { FormatSpec } from './format';
 export { format } from './format';
 
-export { decodeRecipe, encodeRecipe } from './serialize';
+export type { SharedDeck } from './serialize';
+export { decodeRecipe, decodeShare, encodeRecipe, encodeShare } from './serialize';
 
 export type { DecodeErrorReason, Result } from './errors';
 export {

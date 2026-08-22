@@ -7,10 +7,17 @@
  * no compression dependency and there will not be one: the codec has to run unchanged in
  * a browser and in Node, and a link is a few hundred bytes either way.
  *
+ * The same string carries the **deck** as well as the recipe when there is one: the seed,
+ * the locks, and a stamp of the pool it was built against. A recipe plus a seed is a
+ * complete description of a playlist (§3.1), so a link that carried only the recipe was
+ * a link to a different playlist every time it was opened. The three extra keys are
+ * optional, so a recipe-only string still decodes.
+ *
  * `decodeRecipe` returns a `Result` and never throws. A damaged link is an ordinary
  * thing for a person to paste, not an exceptional one.
  */
 
+import type { Lock } from './domain';
 import type { Result } from './errors';
 import { DecodeError, err, ok, unreachable } from './errors';
 import { artistId, playlistId, recipeId, trackId } from './ids';
@@ -179,8 +186,8 @@ function encodeShape(shape: Shape): Compact {
   ];
 }
 
-export function encodeRecipe(recipe: Recipe): string {
-  const compact = {
+function toCompact(recipe: Recipe): Record<string, unknown> {
+  return {
     v: RECIPE_SCHEMA_VERSION,
     i: recipe.id,
     n: recipe.name,
@@ -188,7 +195,42 @@ export function encodeRecipe(recipe: Recipe): string {
     x: recipe.exclusions.map(encodeExclusion),
     h: encodeShape(recipe.shape),
   };
+}
+
+function pack(compact: Record<string, unknown>): string {
   return bytesToBase64Url(new TextEncoder().encode(JSON.stringify(compact)));
+}
+
+export function encodeRecipe(recipe: Recipe): string {
+  return pack(toCompact(recipe));
+}
+
+/**
+ * The recipe **and the deck built from it**. `d` is the seed, `l` is the locks flattened to
+ * `[index, trackId, …]`, `p` is the pool stamp. Three keys, and the whole share-by-link
+ * claim rests on them.
+ */
+export type SharedDeck = {
+  readonly recipe: Recipe;
+  /** Null for a string that carries a recipe alone — the shelf's, and any older link. */
+  readonly seed: number | null;
+  readonly locks: readonly Lock[];
+  /** Null when the link does not say which pool it was built against. */
+  readonly poolStamp: string | null;
+};
+
+export function encodeShare(share: {
+  readonly recipe: Recipe;
+  readonly seed: number;
+  readonly locks: readonly Lock[];
+  readonly poolStamp: string;
+}): string {
+  return pack({
+    ...toCompact(share.recipe),
+    d: share.seed,
+    l: share.locks.flatMap((lock) => [lock.index, lock.trackId]),
+    p: share.poolStamp,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -372,23 +414,25 @@ function decodeShape(value: unknown): Shape | null {
   };
 }
 
-export function decodeRecipe(encoded: string): Result<Recipe, DecodeError> {
+function readRecord(encoded: string): Result<Record<string, unknown>, DecodeError> {
+  const bytes = base64UrlToBytes(encoded);
+  if (bytes === null) return err(DecodeError.notBase64());
+
+  let parsed: unknown;
   try {
-    const bytes = base64UrlToBytes(encoded);
-    if (bytes === null) return err(DecodeError.notBase64());
+    parsed = JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    return err(DecodeError.notJson());
+  }
 
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(new TextDecoder().decode(bytes));
-    } catch {
-      return err(DecodeError.notJson());
-    }
+  const record = asRecord(parsed);
+  if (record === null) return err(DecodeError.notJson());
+  if (record['v'] !== RECIPE_SCHEMA_VERSION) return err(DecodeError.wrongVersion(record['v']));
+  return ok(record);
+}
 
-    const record = asRecord(parsed);
-    if (record === null) return err(DecodeError.notJson());
-
-    if (record['v'] !== RECIPE_SCHEMA_VERSION) return err(DecodeError.wrongVersion(record['v']));
-
+function recipeFromRecord(record: Record<string, unknown>): Result<Recipe, DecodeError> {
+  try {
     const id = asString(record['i']);
     if (id === null) return err(DecodeError.malformed('id'));
 
@@ -422,4 +466,49 @@ export function decodeRecipe(encoded: string): Result<Recipe, DecodeError> {
     // pasted link can never take the app down. §6
     return err(DecodeError.notJson());
   }
+}
+
+export function decodeRecipe(encoded: string): Result<Recipe, DecodeError> {
+  const record = readRecord(encoded);
+  return record.ok ? recipeFromRecord(record.value) : record;
+}
+
+/** Flat pairs, and a lock that will not read drops the whole link rather than half of it. */
+function decodeLocks(value: unknown): readonly Lock[] | null {
+  if (value === undefined) return [];
+  const flat = asArray(value);
+  if (flat === null || flat.length % 2 !== 0) return null;
+  const locks: Lock[] = [];
+  for (let i = 0; i < flat.length; i += 2) {
+    const index = asNumber(flat[i]);
+    const id = asString(flat[i + 1]);
+    if (index === null || !Number.isInteger(index) || index < 0 || id === null) return null;
+    locks.push({ index, trackId: trackId(id) });
+  }
+  return locks;
+}
+
+/**
+ * The recipe and, when the link carries one, the deck built from it. A link written before
+ * the deck travelled decodes with `seed: null` — the caller mints one and says so.
+ */
+export function decodeShare(encoded: string): Result<SharedDeck, DecodeError> {
+  const parsed = readRecord(encoded);
+  if (!parsed.ok) return parsed;
+
+  const recipe = recipeFromRecord(parsed.value);
+  if (!recipe.ok) return recipe;
+
+  const rawSeed = parsed.value['d'];
+  const seed = rawSeed === undefined ? null : asNumber(rawSeed);
+  if (rawSeed !== undefined && seed === null) return err(DecodeError.malformed('seed'));
+
+  const locks = decodeLocks(parsed.value['l']);
+  if (locks === null) return err(DecodeError.malformed('locks'));
+
+  const rawStamp = parsed.value['p'];
+  const poolStamp = rawStamp === undefined ? null : asString(rawStamp);
+  if (rawStamp !== undefined && poolStamp === null) return err(DecodeError.malformed('poolStamp'));
+
+  return ok({ recipe: recipe.value, seed, locks, poolStamp });
 }

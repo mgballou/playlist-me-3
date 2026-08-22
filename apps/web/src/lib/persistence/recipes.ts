@@ -11,8 +11,15 @@
  * and not the deck they were looking at.
  */
 
-import type { DecodeError, Recipe, RecipeId, Result } from '@pm/core';
-import { RECIPE_SCHEMA_VERSION, decodeRecipe, encodeRecipe, recipeId } from '@pm/core';
+import type { DecodeError, Lock, Recipe, RecipeId, Result, SharedDeck } from '@pm/core';
+import {
+  RECIPE_SCHEMA_VERSION,
+  decodeRecipe,
+  decodeShare,
+  encodeRecipe,
+  encodeShare,
+  recipeId,
+} from '@pm/core';
 import { z } from 'zod';
 
 import type { SectionId } from '../layout/sections';
@@ -30,7 +37,7 @@ export const PLACE_KEY = 'place';
  */
 export const SECTION_KEY = 'section';
 
-/** `?r=<encoded>` — the whole recipe, no server, no row. §6 */
+/** `?r=<encoded>` — the whole recipe **and the deck**, no server, no row. §6 */
 export const RECIPE_URL_PARAM = 'r';
 
 export type SavedRecipe = {
@@ -181,13 +188,23 @@ export function importRecipes(json: string): readonly SavedRecipe[] | null {
   return file.data.recipes.map((record) => ({ ...record, id: recipeId(record.id) }));
 }
 
-export function recipeSearchParam(recipe: Recipe): string {
-  return `${RECIPE_URL_PARAM}=${encodeRecipe(recipe)}`;
+/**
+ * A link carries the deck, not just the recipe: the seed and the locks travel with it, and
+ * so does a stamp of the pool it was built from. Without the seed two loads of one link are
+ * two different playlists; without the locks they diverge on the first re-roll.
+ */
+export function shareSearchParam(share: {
+  readonly recipe: Recipe;
+  readonly seed: number;
+  readonly locks: readonly Lock[];
+  readonly poolStamp: string;
+}): string {
+  return `${RECIPE_URL_PARAM}=${encodeShare(share)}`;
 }
 
 /** Null when the URL carries no recipe at all — which is not a failure, just the plain app. */
-export function recipeFromSearch(search: string): Result<Recipe, DecodeError> | null {
+export function shareFromSearch(search: string): Result<SharedDeck, DecodeError> | null {
   const encoded = new URLSearchParams(search).get(RECIPE_URL_PARAM);
   if (encoded === null || encoded.length === 0) return null;
-  return decodeRecipe(encoded);
+  return decodeShare(encoded);
 }
