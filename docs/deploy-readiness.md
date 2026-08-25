@@ -13,6 +13,26 @@ Spotify account and cannot be done here. What is left for a person is at the end
 
 ---
 
+## Where this stands, 25 August 2026
+
+Merged to `main` at `f08e3f9`, together with `fix/share-link-carries-the-deck`. The gates
+below were re-run in full on the merged tree and all five are still green: typecheck, lint,
+**1,406 unit tests across 41 files**, a clean production build, and **44 end-to-end tests**.
+The counts in the gate sections further down are the 20 August run and are left as written —
+a report says what was true when it was made.
+
+**There is still no Vercel account, and that is not a blocker for anything in this repo.**
+Nothing here waits on code. The whole of what is left is the eight numbered steps under
+[What Matthew must do](#what-matthew-must-do), and the first two of them need no account at
+all: register a Spotify app for a client id, and run `openssl rand -base64 32` for a session
+secret. Steps 3 through 8 are the account work, in order, and step 6 cannot happen before
+step 5 because the callback URL is not known until the first deploy hands back a host.
+
+One thing to know before step 4: a deploy with no environment variables set comes up in demo
+mode and works. So the host config can be proved before a single credential exists.
+
+---
+
 ## Gates
 
 | #   | Item                                           | Result                                  |
