@@ -26,8 +26,10 @@ function open(args: {
   readonly list?: CatalogLookup<PlaylistChoice>;
   readonly found?: CatalogLookup<PlaylistChoice>;
 }): { readonly picked: ReturnType<typeof vi.fn> } {
-  listMyPlaylists.mockResolvedValue(args.list ?? { ok: true, items: listed });
-  lookupPlaylist.mockResolvedValue(args.found ?? { ok: true, items: listed.slice(0, 1) });
+  listMyPlaylists.mockResolvedValue(args.list ?? { ok: true, items: listed, demoNotice: null });
+  lookupPlaylist.mockResolvedValue(
+    args.found ?? { ok: true, items: listed.slice(0, 1), demoNotice: null },
+  );
   const picked = vi.fn();
   render(<PlaylistPicker title="Exclude a playlist" onPick={picked} onClose={vi.fn()} />);
   return { picked };
@@ -65,7 +67,7 @@ describe('the playlist picker lists', () => {
   });
 
   it('says so when there is nothing to list', async () => {
-    open({ list: { ok: true, items: [] } });
+    open({ list: { ok: true, items: [], demoNotice: null } });
     expect(await screen.findByText(/Nothing to list/)).toBeInTheDocument();
   });
 
@@ -110,5 +112,52 @@ describe('the playlist picker still takes a link', () => {
     await user.type(screen.getByLabelText(/playlist link/i), 'nonsense');
     await user.click(screen.getByRole('button', { name: 'Use this playlist' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('That is not a playlist link');
+  });
+});
+
+/**
+ * The review at 430px asked *is it obvious these playlists are invented demo data?* and the
+ * answer was **hidden** (`docs/review-answers-2026-09-01.md`, screen 5). The crown's standing
+ * notice is behind the overlay's own scrim while the picker holds the attention, and a
+ * fixture named `Kids Jams (demo)` reads as a playlist somebody named that. So the list says
+ * it where the list is — and says nothing at all against a real library, which is what makes
+ * the notice's presence the fact rather than decoration.
+ */
+describe('a list of invented rows says it is invented', () => {
+  const notice = 'Demo mode. Every artist, album and track here is invented.';
+
+  it('prints the notice the lookup came back with', async () => {
+    open({ list: { ok: true, items: listed, demoNotice: notice } });
+    expect(await screen.findByText(notice)).toBeInTheDocument();
+  });
+
+  it('says it beside the rows it is about', async () => {
+    open({ list: { ok: true, items: listed, demoNotice: notice } });
+    const said = await screen.findByText(notice);
+    const row = await screen.findByRole('button', { name: /Kids Jams/ });
+    expect(said.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('says nothing when the catalog is a real one', async () => {
+    open({ list: { ok: true, items: listed, demoNotice: null } });
+    await screen.findByRole('button', { name: /Kids Jams/ });
+    expect(screen.queryByText(/invented/)).toBeNull();
+  });
+
+  it('does not lean on the playlist names to carry it', async () => {
+    open({
+      list: {
+        ok: true,
+        items: [{ id: playlistId('pl-late-shift'), name: 'Late Shift', trackCount: 28 }],
+        demoNotice: notice,
+      },
+    });
+    expect(await screen.findByText(notice)).toBeInTheDocument();
+  });
+
+  it('keeps the notice out of the way of a listing that failed', async () => {
+    open({ list: { ok: false, message: 'Spotify turned that down.' } });
+    await screen.findByRole('alert');
+    expect(screen.queryByText(/invented/)).toBeNull();
   });
 });

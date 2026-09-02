@@ -17,8 +17,9 @@
 
 import type { ArtistId, PlaylistId } from '@pm/core';
 import { playlistId } from '@pm/core';
-import { SEARCH_MAX_LIMIT, SpotifyError, demoCatalog } from '@pm/spotify';
+import { DEMO_NOTICE, SEARCH_MAX_LIMIT, SpotifyError, demoCatalog } from '@pm/spotify';
 
+import type { SpotifyHandle } from '../spotify/factory';
 import { getSpotifyHandle } from '../spotify/server';
 import type {
   ArtistChoice,
@@ -30,6 +31,18 @@ import type {
 /** Two pages of ten is enough to name a thing without spending the budget on a picker. */
 const PICKER_PAGES = 2;
 
+/**
+ * What the rows are, said with the rows. The honesty rules ask that demo fixtures say so,
+ * and the crown saying it once is not enough on a phone: a review at 430px answered *is it
+ * obvious these playlists are invented demo data?* with **hidden**, because an overlay dims
+ * the crown behind it and a name ending "(demo)" reads as a name
+ * (`docs/review-answers-2026-09-01.md`, screen 5). So the answer carries its own provenance
+ * and every picker prints it over the list.
+ */
+function noticeFor(handle: SpotifyHandle): string | null {
+  return handle.mode === 'demo' ? DEMO_NOTICE : null;
+}
+
 function failed(cause: unknown): { readonly ok: false; readonly message: string } {
   return {
     ok: false,
@@ -39,7 +52,7 @@ function failed(cause: unknown): { readonly ok: false; readonly message: string 
 
 export async function findArtists(query: string): Promise<CatalogLookup<ArtistChoice>> {
   const terms = query.trim();
-  if (terms.length === 0) return { ok: true, items: [] };
+  if (terms.length === 0) return { ok: true, items: [], demoNotice: null };
 
   try {
     const handle = await getSpotifyHandle();
@@ -65,7 +78,7 @@ export async function findArtists(query: string): Promise<CatalogLookup<ArtistCh
       .map(([id, entry]) => ({ id, name: entry.name, hits: entry.hits }))
       .sort((a, b) => b.hits - a.hits || a.name.localeCompare(b.name));
 
-    return { ok: true, items };
+    return { ok: true, items, demoNotice: noticeFor(handle) };
   } catch (cause) {
     return failed(cause);
   }
@@ -73,7 +86,7 @@ export async function findArtists(query: string): Promise<CatalogLookup<ArtistCh
 
 export async function findTracks(query: string): Promise<CatalogLookup<TrackChoice>> {
   const terms = query.trim();
-  if (terms.length === 0) return { ok: true, items: [] };
+  if (terms.length === 0) return { ok: true, items: [], demoNotice: null };
 
   try {
     const handle = await getSpotifyHandle();
@@ -84,6 +97,7 @@ export async function findTracks(query: string): Promise<CatalogLookup<TrackChoi
     });
     return {
       ok: true,
+      demoNotice: noticeFor(handle),
       items: found.items.map((track) => ({
         id: track.id,
         title: track.title,
@@ -108,7 +122,7 @@ export async function listMyPlaylists(): Promise<CatalogLookup<PlaylistChoice>> 
   try {
     const handle = await getSpotifyHandle();
     const lists = await handle.client.getUserPlaylists({ maxItems: PICKER_PLAYLISTS });
-    return { ok: true, items: lists };
+    return { ok: true, items: lists, demoNotice: noticeFor(handle) };
   } catch (cause) {
     return failed(cause);
   }
@@ -131,6 +145,7 @@ export async function lookupPlaylist(reference: string): Promise<CatalogLookup<P
     return {
       ok: true,
       items: [{ id, name: known?.name ?? id, trackCount: tracks.length }],
+      demoNotice: noticeFor(handle),
     };
   } catch (cause) {
     return failed(cause);
