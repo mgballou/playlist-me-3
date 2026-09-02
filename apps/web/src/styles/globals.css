@@ -334,6 +334,25 @@ h4 {
 :root[data-collapsed='true'] .stage {
   grid-template-columns: minmax(0, 1fr);
   padding: var(--space-4);
+  /**
+   * The stage is the containing block for everything inside it, and that is load-bearing
+   * rather than tidy. An absolutely positioned descendant is clipped by an ancestor's
+   * `overflow` only where that ancestor is its containing block, so without this the
+   * clipped `.slot__time` on every one of twenty-five slots resolved against the viewport
+   * instead — twenty-five 1px boxes at their static positions, the deepest of them nearly a
+   * thousand pixels past the foot of a frame that is exactly `100dvh` tall.
+   *
+   * The document therefore had a scrollbar it is not supposed to have, and opening the
+   * shelf with the deck scrolled moved focus into the panel, which scrolled the document,
+   * which slid the whole frame up: the ledger landed across the middle of the shelf and
+   * `Keep this recipe` could not be pressed at all. That is the review's screen 12,
+   * answered **covered** (`docs/review-answers-2026-09-01.md`).
+   *
+   * The z-order is not the bug and is not touched. The ledger sits above an overlay on
+   * purpose — nothing may dim it (§7) — and it never reaches one while the rails stay where
+   * §7.1 pins them.
+   */
+  position: relative;
   overflow-y: auto;
   /* The scroll stops here rather than dragging the page behind it. */
   overscroll-behavior: contain;
