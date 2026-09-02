@@ -1902,6 +1902,23 @@ h4 {
   font-size: var(--text-sm);
 }
 
+/**
+ * The demo notice, over the rows it is about. It is a **report**, so it takes the amber rule
+ * and never the accent, which means act (§5 rule 1, §5 rule 4) — and it keeps full ink rather
+ * than `muted`, because the note under it being quieter is the whole point: one of the two
+ * says what the list *is*, and the other says what reading it costs.
+ */
+.picker__demo {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-inline-start: var(--space-1) solid var(--led);
+  border-radius: var(--radius);
+  background: var(--surface-well);
+  font-size: var(--text-sm);
+}
+
 .picker__form {
   display: flex;
   flex-direction: column;
