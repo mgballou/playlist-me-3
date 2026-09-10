@@ -26,6 +26,7 @@ import type {
   CoverUploadInput,
   CreatePlaylistInput,
   ListOptions,
+  ListSlice,
   PlaylistSummary,
   RequestCounter,
   RequestOptions,
@@ -45,6 +46,7 @@ import {
   assertSearchWindow,
   createRequestCounter,
   nextSearchOffset,
+  sliceCoverage,
   trackSearchTerms,
   trackUri,
 } from './client';
@@ -315,6 +317,10 @@ export class LiveSpotifyClient implements SpotifyClient {
    * playlist — rather than dropping it, because the page's own length is what says whether
    * there is another page. Filtering first and counting after would end a list of four
    * hundred at the first hole in it.
+   *
+   * It also hands back the page's `total`, which every offset-paged body carries and which
+   * this used to throw away. That number is the difference between a read that finished and
+   * a read that stopped, and it costs nothing — it is already in the response being parsed.
    */
   private async collect<T>(args: {
     readonly endpoint: string;
@@ -322,12 +328,19 @@ export class LiveSpotifyClient implements SpotifyClient {
     readonly query?: Query;
     readonly maxItems: number;
     readonly signal?: AbortSignal | undefined;
-    readonly read: (body: unknown) => readonly (T | null)[];
-  }): Promise<readonly T[]> {
+    readonly read: (body: unknown) => {
+      readonly entries: readonly (T | null)[];
+      readonly total: number | null;
+    };
+  }): Promise<ListSlice<T>> {
     const limit = Math.min(PAGE_MAX_LIMIT, Math.max(1, args.maxItems));
     assertPageLimit(limit);
 
     const out: T[] = [];
+    let scanned = 0;
+    let total: number | null = null;
+    let listEnded = false;
+
     for (let offset = 0; out.length < args.maxItems; offset += limit) {
       const body = await this.json({
         endpoint: args.endpoint,
@@ -336,12 +349,28 @@ export class LiveSpotifyClient implements SpotifyClient {
         signal: args.signal,
       });
       const page = args.read(body);
-      for (const item of page) {
+      if (page.total !== null) total = page.total;
+      scanned += page.entries.length;
+      for (const item of page.entries) {
         if (item !== null) out.push(item);
       }
-      if (page.length < limit) break;
+      if (page.entries.length < limit) {
+        listEnded = true;
+        break;
+      }
     }
-    return out.slice(0, args.maxItems);
+
+    const items = out.slice(0, args.maxItems);
+    return {
+      items,
+      coverage: sliceCoverage({
+        read: items.length,
+        held: out.length,
+        scanned,
+        total,
+        listEnded,
+      }),
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -377,13 +406,16 @@ export class LiveSpotifyClient implements SpotifyClient {
     }
 
     const endpoint = 'GET /artists/{id}/albums';
-    const albums = await this.collect<Album>({
+    const { items: albums } = await this.collect<Album>({
       endpoint,
       path: `/artists/${encodeURIComponent(id)}/albums`,
       query: { include_groups: INCLUDE_GROUPS[options.depth] },
       maxItems: options.maxItems ?? DEFAULT_MAX_ITEMS,
       signal: options.signal,
-      read: (body) => parseResponse(artistAlbumsPageSchema, body, endpoint).items.map(mapAlbum),
+      read: (body) => {
+        const page = parseResponse(artistAlbumsPageSchema, body, endpoint);
+        return { entries: page.items.map(mapAlbum), total: page.total ?? null };
+      },
     });
 
     for (const album of albums) this.albumCache.set(album.id, album);
@@ -428,15 +460,18 @@ export class LiveSpotifyClient implements SpotifyClient {
     // come along for `releaseYear` and for the depth proxy's denominator (§3.5).
     const album = await this.getAlbum(id, { signal: options?.signal });
     const endpoint = 'GET /albums/{id}/tracks';
-    const tracks = await this.collect<CatalogTrack>({
+    const { items: tracks } = await this.collect<CatalogTrack>({
       endpoint,
       path: `/albums/${encodeURIComponent(id)}/tracks`,
       maxItems: options?.maxItems ?? Math.max(album.trackCount, PAGE_MAX_LIMIT),
       signal: options?.signal,
-      read: (body) =>
-        parseResponse(albumTracksPageSchema, body, endpoint).items.map((item) =>
-          mapAlbumTrack(item, album),
-        ),
+      read: (body) => {
+        const page = parseResponse(albumTracksPageSchema, body, endpoint);
+        return {
+          entries: page.items.map((item) => mapAlbumTrack(item, album)),
+          total: page.total ?? null,
+        };
+      },
     });
 
     this.albumTracksCache.set(id, tracks);
@@ -520,21 +555,24 @@ export class LiveSpotifyClient implements SpotifyClient {
   // The person
   // -------------------------------------------------------------------------
 
-  async getSavedTracks(options?: ListOptions): Promise<readonly CatalogTrack[]> {
+  async getSavedTracks(options?: ListOptions): Promise<ListSlice<CatalogTrack>> {
     const endpoint = 'GET /me/tracks';
     return this.collect<CatalogTrack>({
       endpoint,
       path: '/me/tracks',
       maxItems: options?.maxItems ?? DEFAULT_MAX_ITEMS,
       signal: options?.signal,
-      read: (body) =>
-        parseResponse(savedTracksPageSchema, body, endpoint).items.map((item) =>
-          mapTrack(item.track),
-        ),
+      read: (body) => {
+        const page = parseResponse(savedTracksPageSchema, body, endpoint);
+        return {
+          entries: page.items.map((item) => mapTrack(item.track)),
+          total: page.total ?? null,
+        };
+      },
     });
   }
 
-  async getTopTracks(range: TopRange, options?: ListOptions): Promise<readonly CatalogTrack[]> {
+  async getTopTracks(range: TopRange, options?: ListOptions): Promise<ListSlice<CatalogTrack>> {
     const endpoint = 'GET /me/top/tracks';
     return this.collect<CatalogTrack>({
       endpoint,
@@ -542,12 +580,19 @@ export class LiveSpotifyClient implements SpotifyClient {
       query: { time_range: TIME_RANGES[range] },
       maxItems: options?.maxItems ?? DEFAULT_MAX_ITEMS,
       signal: options?.signal,
-      read: (body) => parseResponse(trackPageSchema, body, endpoint).items.map(mapTrack),
+      read: (body) => {
+        const page = parseResponse(trackPageSchema, body, endpoint);
+        return { entries: page.items.map(mapTrack), total: page.total ?? null };
+      },
     });
   }
 
-  /** Recently played is a cursor endpoint capped at 50, so one page is all of it. */
-  async getRecentlyPlayed(options?: ListOptions): Promise<readonly CatalogTrack[]> {
+  /**
+   * Recently played is a cursor endpoint capped at 50, so one page is all of it — and all
+   * anyone can ever have. It sends no usable total, so a full page reads as `unmeasured`:
+   * the app knows it saw fifty plays and does not know what came before them.
+   */
+  async getRecentlyPlayed(options?: ListOptions): Promise<ListSlice<CatalogTrack>> {
     const endpoint = 'GET /me/player/recently-played';
     const body = await this.json({
       endpoint,
@@ -555,17 +600,29 @@ export class LiveSpotifyClient implements SpotifyClient {
       query: { limit: PAGE_MAX_LIMIT },
       signal: options?.signal,
     });
-    const items = parseResponse(recentlyPlayedPageSchema, body, endpoint).items.map((item) =>
+    const played = parseResponse(recentlyPlayedPageSchema, body, endpoint).items.map((item) =>
       mapTrack(item.track),
     );
-    return items.slice(0, options?.maxItems ?? items.length);
+    const items = played.slice(0, options?.maxItems ?? played.length);
+    return {
+      items,
+      coverage: sliceCoverage({
+        read: items.length,
+        held: played.length,
+        scanned: played.length,
+        total: null,
+        listEnded: played.length < PAGE_MAX_LIMIT,
+      }),
+    };
   }
 
-  async getFollowedArtists(options?: ListOptions): Promise<readonly Artist[]> {
+  async getFollowedArtists(options?: ListOptions): Promise<ListSlice<Artist>> {
     const endpoint = 'GET /me/following?type=artist';
     const maxItems = options?.maxItems ?? DEFAULT_MAX_ITEMS;
     const out: Artist[] = [];
     let after: string | undefined;
+    let total: number | null = null;
+    let listEnded = false;
 
     while (out.length < maxItems) {
       const body = await this.json({
@@ -575,30 +632,47 @@ export class LiveSpotifyClient implements SpotifyClient {
         signal: options?.signal,
       });
       const page = parseResponse(followedArtistsResponseSchema, body, endpoint).artists;
+      if (page.total !== undefined && page.total !== null) total = page.total;
       const artists = page.items.map((item) => mapArtist(item));
       for (const artist of artists) {
         this.artistCache.set(artist.id, artist);
         out.push(artist);
       }
       const nextAfter = page.cursors?.after;
-      if (artists.length === 0 || nextAfter === undefined || nextAfter === null) break;
+      if (artists.length === 0 || nextAfter === undefined || nextAfter === null) {
+        listEnded = true;
+        break;
+      }
       after = nextAfter;
     }
 
-    return out.slice(0, maxItems);
+    const items = out.slice(0, maxItems);
+    return {
+      items,
+      coverage: sliceCoverage({
+        read: items.length,
+        held: out.length,
+        scanned: out.length,
+        total,
+        listEnded,
+      }),
+    };
   }
 
-  async getPlaylistTracks(id: PlaylistId, options?: ListOptions): Promise<readonly CatalogTrack[]> {
+  async getPlaylistTracks(id: PlaylistId, options?: ListOptions): Promise<ListSlice<CatalogTrack>> {
     const endpoint = 'GET /playlists/{id}/items';
     return this.collect<CatalogTrack>({
       endpoint,
       path: `/playlists/${encodeURIComponent(id)}/items`,
       maxItems: options?.maxItems ?? DEFAULT_MAX_ITEMS,
       signal: options?.signal,
-      read: (body) =>
-        parseResponse(playlistItemsPageSchema, body, endpoint).items.map((item) =>
-          item.track === null ? null : mapTrack(item.track),
-        ),
+      read: (body) => {
+        const page = parseResponse(playlistItemsPageSchema, body, endpoint);
+        return {
+          entries: page.items.map((item) => (item.track === null ? null : mapTrack(item.track))),
+          total: page.total ?? null,
+        };
+      },
     });
   }
 
@@ -609,18 +683,24 @@ export class LiveSpotifyClient implements SpotifyClient {
    */
   async getUserPlaylists(options?: ListOptions): Promise<readonly PlaylistSummary[]> {
     const endpoint = 'GET /me/playlists';
-    return this.collect<PlaylistSummary>({
+    const { items } = await this.collect<PlaylistSummary>({
       endpoint,
       path: '/me/playlists',
       maxItems: options?.maxItems ?? DEFAULT_MAX_ITEMS,
       signal: options?.signal,
-      read: (body) =>
-        parseResponse(userPlaylistsPageSchema, body, endpoint).items.map((list) =>
-          list === null
-            ? null
-            : { id: playlistId(list.id), name: list.name, trackCount: list.tracks?.total ?? 0 },
-        ),
+      read: (body) => {
+        const page = parseResponse(userPlaylistsPageSchema, body, endpoint);
+        return {
+          entries: page.items.map((list) =>
+            list === null
+              ? null
+              : { id: playlistId(list.id), name: list.name, trackCount: list.tracks?.total ?? 0 },
+          ),
+          total: page.total ?? null,
+        };
+      },
     });
+    return items;
   }
 
   async currentUser(options?: RequestOptions): Promise<SpotifyUser> {

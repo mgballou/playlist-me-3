@@ -67,6 +67,38 @@ export type Track = {
 export type TrackPool = readonly Track[];
 
 /**
+ * How much of one of the person's lists the app actually holds.
+ *
+ * Every one of these lists is read under a ceiling, because reading a whole library costs
+ * requests (§5.2). A set that stopped at its ceiling and a set that is genuinely that short
+ * are different facts, and only one of them means the recipe was honored: an id the engine
+ * never heard of is permitted, so a clipped block leaks exactly the music it names.
+ *
+ * `total` is the source's own count for the list, which arrives with the read and costs
+ * nothing extra. Two of the endpoints send no count at all, so there is a variant for
+ * *stopped at the ceiling and nobody said how long the list is* rather than a guess.
+ */
+export type SetCoverage =
+  /** The whole list was read. */
+  | { readonly kind: 'whole'; readonly read: number }
+  /** The read stopped at a ceiling, and the source says how long the list is. */
+  | { readonly kind: 'clipped'; readonly read: number; readonly total: number }
+  /** The read stopped at a ceiling and no total came with it, so the rest is unmeasured. */
+  | { readonly kind: 'unmeasured'; readonly read: number }
+  /** The read failed. The set is empty, and that is a fact about the request, not the person. */
+  | { readonly kind: 'unread' };
+
+/** What the engine holds of the person, set by set, in the same names as the sets. */
+export type ContextCoverage = {
+  readonly libraryTrackIds: SetCoverage;
+  readonly topTrackIds: SetCoverage;
+  readonly recentlyHeardTrackIds: SetCoverage;
+  readonly followedArtistIds: SetCoverage;
+  /** A playlist named by an exclusion and absent from this map was never read at all. */
+  readonly playlistTrackIds: ReadonlyMap<PlaylistId, SetCoverage>;
+};
+
+/**
  * Everything the engine needs to know about the person, passed in as plain sets so the
  * engine does no I/O (§3.1). `packages/spotify` fills these from the user endpoints;
  * tests fill them by hand.
@@ -82,16 +114,31 @@ export type EngineContext = {
   readonly followedArtistIds: ReadonlySet<ArtistId>;
   /** Contents of each playlist named by a `playlist` exclusion. */
   readonly playlistTrackIds: ReadonlyMap<PlaylistId, ReadonlySet<TrackId>>;
+  /** How much of each set above the app holds. Travels with the sets so a pass can say so. */
+  readonly coverage: ContextCoverage;
 };
 
-/** A context that knows nothing about the person. Useful as a base in tests and demos. */
+/**
+ * A context that knows nothing about the person. Useful as a base in tests and demos.
+ *
+ * Its sets are whole and empty rather than unread: nothing was asked for and nothing failed,
+ * so there is nothing for a report to warn about.
+ */
 export function emptyContext(): EngineContext {
+  const whole: SetCoverage = { kind: 'whole', read: 0 };
   return {
     libraryTrackIds: new Set(),
     topTrackIds: new Set(),
     recentlyHeardTrackIds: new Set(),
     followedArtistIds: new Set(),
     playlistTrackIds: new Map(),
+    coverage: {
+      libraryTrackIds: whole,
+      topTrackIds: whole,
+      recentlyHeardTrackIds: whole,
+      followedArtistIds: whole,
+      playlistTrackIds: new Map(),
+    },
   };
 }
 

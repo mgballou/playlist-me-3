@@ -475,8 +475,8 @@ describe('paging', () => {
         ? { json: pagePayload(full.map((track) => ({ track }))) }
         : { json: pagePayload([{ track: trackPayload({ id: 'tr-last' }) }]) },
     );
-    const tracks = await test.client.getSavedTracks();
-    expect(tracks).toHaveLength(51);
+    const { items } = await test.client.getSavedTracks();
+    expect(items).toHaveLength(51);
   });
 
   it('stops asking once a page comes back short', async () => {
@@ -490,8 +490,8 @@ describe('paging', () => {
       trackPayload({ id: `tr-${String(index)}` }),
     );
     const test = harness(() => ({ json: pagePayload(full.map((track) => ({ track }))) }));
-    const tracks = await test.client.getSavedTracks({ maxItems: 20 });
-    expect(tracks).toHaveLength(20);
+    const { items } = await test.client.getSavedTracks({ maxItems: 20 });
+    expect(items).toHaveLength(20);
   });
 
   it('sends the time range for top tracks', async () => {
@@ -510,8 +510,8 @@ describe('paging', () => {
     const test = harness(() => ({
       json: pagePayload([{ track: trackPayload() }, { track: null }]),
     }));
-    const tracks = await test.client.getPlaylistTracks(playlistId('pl-1'));
-    expect(tracks).toHaveLength(1);
+    const { items } = await test.client.getPlaylistTracks(playlistId('pl-1'));
+    expect(items).toHaveLength(1);
   });
 
   it('keeps paging past a hole in a playlist', async () => {
@@ -523,8 +523,37 @@ describe('paging', () => {
         ? { json: pagePayload([...full.slice(1), { track: null }]) }
         : { json: pagePayload([{ track: trackPayload({ id: 'tr-last' }) }]) },
     );
-    const tracks = await test.client.getPlaylistTracks(playlistId('pl-1'));
-    expect(tracks).toHaveLength(50);
+    const { items } = await test.client.getPlaylistTracks(playlistId('pl-1'));
+    expect(items).toHaveLength(50);
+  });
+
+  it('reports the ceiling it stopped at against the total in the body', async () => {
+    const full = Array.from({ length: 50 }, (_, index) =>
+      trackPayload({ id: `tr-${String(index)}` }),
+    );
+    const test = harness(() => ({
+      json: pagePayload(
+        full.map((track) => ({ track })),
+        { total: 900 },
+      ),
+    }));
+    const { coverage } = await test.client.getSavedTracks({ maxItems: 20 });
+    expect(coverage).toEqual({ kind: 'clipped', read: 20, total: 900 });
+  });
+
+  it('calls a list that ended before the ceiling whole', async () => {
+    const test = harness(() => ({ json: pagePayload([{ track: trackPayload() }]) }));
+    const { coverage } = await test.client.getSavedTracks();
+    expect(coverage).toEqual({ kind: 'whole', read: 1 });
+  });
+
+  it('reports a clipped playlist against the count Spotify sent', async () => {
+    const full = Array.from({ length: 50 }, (_, index) => ({
+      track: trackPayload({ id: `tr-${String(index)}` }),
+    }));
+    const test = harness(() => ({ json: pagePayload(full, { total: 900 }) }));
+    const { coverage } = await test.client.getPlaylistTracks(playlistId('pl-1'), { maxItems: 400 });
+    expect(coverage).toEqual({ kind: 'clipped', read: 400, total: 900 });
   });
 
   it('follows the cursor for followed artists', async () => {
@@ -533,8 +562,8 @@ describe('paging', () => {
         ? { json: { artists: { items: [artistPayload()], cursors: { after: 'ar-101' } } } }
         : { json: { artists: { items: [artistPayload({ id: 'ar-102' })], cursors: {} } } },
     );
-    const artists = await test.client.getFollowedArtists();
-    expect(artists).toHaveLength(2);
+    const { items } = await test.client.getFollowedArtists();
+    expect(items).toHaveLength(2);
   });
 });
 

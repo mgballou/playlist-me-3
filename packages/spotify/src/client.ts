@@ -15,6 +15,7 @@ import type {
   ArtistId,
   CatalogDepth,
   PlaylistId,
+  SetCoverage,
   TopRange,
   TrackId,
   YearRange,
@@ -102,6 +103,21 @@ export type AlbumSearchQuery = {
   readonly years?: YearRange | undefined;
   readonly limit: number;
   readonly offset: number;
+};
+
+/**
+ * A capped read of one of the person's long lists: what came back, and how much of the list
+ * that is. §5.1.1
+ *
+ * `SearchPage` has said the same thing about search since the beginning — *we stopped, and
+ * here is why*. The paged `/me` reads said nothing, so an exclusion built on one of them
+ * could stop looking halfway through a library and report a clean pass. The count the
+ * coverage compares against is the endpoint's own `total`, which arrives in the same body
+ * and costs no extra request.
+ */
+export type ListSlice<T> = {
+  readonly items: readonly T[];
+  readonly coverage: SetCoverage;
 };
 
 export type SearchPage<T> = {
@@ -204,11 +220,17 @@ export interface SpotifyClient {
     options?: RequestOptions,
   ): Promise<SearchPage<CatalogTrack>>;
   searchAlbums(query: AlbumSearchQuery, options?: RequestOptions): Promise<SearchPage<Album>>;
-  getSavedTracks(options?: ListOptions): Promise<readonly CatalogTrack[]>;
-  getTopTracks(range: TopRange, options?: ListOptions): Promise<readonly CatalogTrack[]>;
-  getRecentlyPlayed(options?: ListOptions): Promise<readonly CatalogTrack[]>;
-  getFollowedArtists(options?: ListOptions): Promise<readonly Artist[]>;
-  getPlaylistTracks(id: PlaylistId, options?: ListOptions): Promise<readonly CatalogTrack[]>;
+  /**
+   * The five reads below back an exclusion or the familiarity score, and every one of them
+   * is capped. They answer with a `ListSlice` rather than an array so that a caller cannot
+   * mistake the ceiling for the end of the list — which is the whole of §3.1's promise that
+   * an exclusion says what it did.
+   */
+  getSavedTracks(options?: ListOptions): Promise<ListSlice<CatalogTrack>>;
+  getTopTracks(range: TopRange, options?: ListOptions): Promise<ListSlice<CatalogTrack>>;
+  getRecentlyPlayed(options?: ListOptions): Promise<ListSlice<CatalogTrack>>;
+  getFollowedArtists(options?: ListOptions): Promise<ListSlice<Artist>>;
+  getPlaylistTracks(id: PlaylistId, options?: ListOptions): Promise<ListSlice<CatalogTrack>>;
   /**
    * The playlists the person owns or follows. `GET /users/{id}/playlists` went in the
    * 2026-02 cull; the `/me` form did not, and it is what makes the headline exclusion —
@@ -227,6 +249,35 @@ export interface SpotifyClient {
 // ---------------------------------------------------------------------------
 // Query construction and guards, shared by both implementations
 // ---------------------------------------------------------------------------
+
+/**
+ * What a capped read knows about the list it read. Three questions in order: did the list end
+ * before the ceiling; if not, does the endpoint say how long it is; and if it does not, say so
+ * rather than guessing at a number (CLAUDE.md's honesty rules).
+ *
+ * `scanned` counts raw entries, holes included, because that is what a `total` counts. The
+ * total for a playlist is Spotify's own `tracks.total`, so "read 400 of 900" is the same nine
+ * hundred the picker prints beside the name.
+ */
+export function sliceCoverage(args: {
+  /** Items handed back, after the ceiling. */
+  readonly read: number;
+  /** Usable items collected before the ceiling was applied. */
+  readonly held: number;
+  /** Raw entries seen, holes included. */
+  readonly scanned: number;
+  readonly total: number | null;
+  /** True when a page came back short, which is the list ending rather than the ceiling. */
+  readonly listEnded: boolean;
+}): SetCoverage {
+  const sawEveryEntry = args.listEnded || (args.total !== null && args.scanned >= args.total);
+  if (sawEveryEntry && args.held === args.read) return { kind: 'whole', read: args.read };
+  const total = sawEveryEntry ? (args.total ?? args.scanned) : args.total;
+  if (total === null) return { kind: 'unmeasured', read: args.read };
+  return total > args.read
+    ? { kind: 'clipped', read: args.read, total }
+    : { kind: 'whole', read: args.read };
+}
 
 export function assertSearchWindow(limit: number, offset: number): void {
   if (limit < 1 || limit > SEARCH_MAX_LIMIT)

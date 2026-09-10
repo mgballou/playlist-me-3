@@ -154,6 +154,8 @@ export const followedArtistsResponseSchema = z.object({
   artists: z.object({
     items: z.array(artistSchema),
     next: z.string().nullable().optional(),
+    /** How many the person follows. It rides along with the first page and costs nothing. */
+    total: z.number().int().nonnegative().optional(),
     cursors: z.object({ after: z.string().nullable().optional() }).optional(),
   }),
 });
