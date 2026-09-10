@@ -10,11 +10,13 @@
 
 import type {
   ArtistRef,
+  ContextCoverage,
   Dial,
   EngineContext,
   Exclusion,
   OrderStrategy,
   Recipe,
+  SetCoverage,
   Shape,
   Source,
   Target,
@@ -207,10 +209,19 @@ export type ContextOverrides = {
   readonly recentlyHeardTrackIds?: readonly string[];
   readonly followedArtistIds?: readonly string[];
   readonly playlistTrackIds?: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Defaults to a whole read of whatever was passed above, which is what a hand-built
+   * context means. Pass it to build a context that stopped short.
+   */
+  readonly coverage?: Partial<ContextCoverage>;
 };
 
+function whole(size: number): SetCoverage {
+  return { kind: 'whole', read: size };
+}
+
 export function makeContext(overrides: ContextOverrides = {}): EngineContext {
-  return {
+  const sets = {
     libraryTrackIds: new Set((overrides.libraryTrackIds ?? []).map(trackId)),
     topTrackIds: new Set((overrides.topTrackIds ?? []).map(trackId)),
     recentlyHeardTrackIds: new Set((overrides.recentlyHeardTrackIds ?? []).map(trackId)),
@@ -221,6 +232,21 @@ export function makeContext(overrides: ContextOverrides = {}): EngineContext {
         new Set(members.map(trackId)),
       ]),
     ),
+  };
+
+  return {
+    ...sets,
+    coverage: {
+      libraryTrackIds: overrides.coverage?.libraryTrackIds ?? whole(sets.libraryTrackIds.size),
+      topTrackIds: overrides.coverage?.topTrackIds ?? whole(sets.topTrackIds.size),
+      recentlyHeardTrackIds:
+        overrides.coverage?.recentlyHeardTrackIds ?? whole(sets.recentlyHeardTrackIds.size),
+      followedArtistIds:
+        overrides.coverage?.followedArtistIds ?? whole(sets.followedArtistIds.size),
+      playlistTrackIds:
+        overrides.coverage?.playlistTrackIds ??
+        new Map([...sets.playlistTrackIds].map(([id, members]) => [id, whole(members.size)])),
+    },
   };
 }
 

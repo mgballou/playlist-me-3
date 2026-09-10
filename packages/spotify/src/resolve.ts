@@ -228,23 +228,27 @@ async function resolveOne({
 
     case 'playlist':
       return result(
-        await client.getPlaylistTracks(source.playlistId, {
-          ...options,
-          maxItems: budget.maxTracksPerSource,
-        }),
+        (
+          await client.getPlaylistTracks(source.playlistId, {
+            ...options,
+            maxItems: budget.maxTracksPerSource,
+          })
+        ).items,
       );
 
     case 'library':
       return result(
-        await client.getSavedTracks({ ...options, maxItems: budget.maxTracksPerSource }),
+        (await client.getSavedTracks({ ...options, maxItems: budget.maxTracksPerSource })).items,
       );
 
     case 'topTracks':
       return result(
-        await client.getTopTracks(source.range, {
-          ...options,
-          maxItems: budget.maxTracksPerSource,
-        }),
+        (
+          await client.getTopTracks(source.range, {
+            ...options,
+            maxItems: budget.maxTracksPerSource,
+          })
+        ).items,
       );
 
     case 'followedArtists':
@@ -484,7 +488,7 @@ async function fromFollowedArtists(args: {
   readonly options: RequestOptions;
   readonly budget: ResolveLimits;
 }): Promise<SourceResult> {
-  const artists = await args.client.getFollowedArtists({
+  const { items: artists } = await args.client.getFollowedArtists({
     ...args.options,
     maxItems: args.budget.maxArtistsPerSource,
   });

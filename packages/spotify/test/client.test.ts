@@ -18,6 +18,7 @@ import {
   assertSearchWindow,
   createRequestCounter,
   nextSearchOffset,
+  sliceCoverage,
   trackSearchTerms,
   trackUri,
 } from '../src/index';
@@ -228,5 +229,44 @@ describe('createRequestCounter', () => {
     counter.record('GET /me');
     counter.reset();
     expect(counter.snapshot().total).toBe(0);
+  });
+});
+
+describe('sliceCoverage', () => {
+  it('calls a read that ran out of list whole', () => {
+    expect(sliceCoverage({ read: 30, held: 30, scanned: 30, total: 30, listEnded: true })).toEqual({
+      kind: 'whole',
+      read: 30,
+    });
+  });
+
+  it('calls a read that stopped at the ceiling clipped, against the source total', () => {
+    expect(
+      sliceCoverage({ read: 400, held: 400, scanned: 400, total: 900, listEnded: false }),
+    ).toEqual({ kind: 'clipped', read: 400, total: 900 });
+  });
+
+  it('calls a list exactly as long as its ceiling whole', () => {
+    expect(
+      sliceCoverage({ read: 200, held: 200, scanned: 200, total: 200, listEnded: false }),
+    ).toEqual({ kind: 'whole', read: 200 });
+  });
+
+  it('refuses to guess at a total nobody sent', () => {
+    expect(
+      sliceCoverage({ read: 50, held: 50, scanned: 50, total: null, listEnded: false }),
+    ).toEqual({ kind: 'unmeasured', read: 50 });
+  });
+
+  it('counts a list it finished even when no total came with it', () => {
+    expect(
+      sliceCoverage({ read: 12, held: 60, scanned: 60, total: null, listEnded: true }),
+    ).toEqual({ kind: 'clipped', read: 12, total: 60 });
+  });
+
+  it('calls a list whole when the holes in it are what made it short', () => {
+    expect(
+      sliceCoverage({ read: 380, held: 380, scanned: 400, total: 400, listEnded: false }),
+    ).toEqual({ kind: 'whole', read: 380 });
   });
 });

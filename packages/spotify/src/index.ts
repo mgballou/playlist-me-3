@@ -24,6 +24,7 @@ export type {
   CoverUploadInput,
   CreatePlaylistInput,
   ListOptions,
+  ListSlice,
   PlaylistSummary,
   RequestAccounting,
   RequestCounter,
@@ -50,6 +51,7 @@ export {
   assertSearchWindow,
   createRequestCounter,
   nextSearchOffset,
+  sliceCoverage,
   trackSearchTerms,
   trackUri,
 } from './client';

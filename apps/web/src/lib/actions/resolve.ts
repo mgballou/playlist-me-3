@@ -10,89 +10,18 @@
  * The client does everything else. `build` is pure and instant, so re-roll, lock, reject and
  * reorder happen in the browser against the pool already in hand (ui-sensibility §2.10).
  * **Never re-fetch to re-roll.**
+ *
+ * Reading the person is `../workbench/context`. It is a plain module rather than a second
+ * export of this one because every export of a `'use server'` file is a public endpoint.
  */
 
-import type { ArtistId, TrackId } from '@pm/core';
-import type { SpotifyClient } from '@pm/spotify';
-import { QuotaExceeded, resolveSources } from '@pm/spotify';
+import { resolveSources } from '@pm/spotify';
 
 import { toErrorSurface } from '../errors/surface';
 import { getSpotifyHandle } from '../spotify/server';
+import { resolveContext } from '../workbench/context';
 import type { ResolveOutcome } from '../workbench/outcome';
-import type { ContextPayload, ResolveRequest } from '../workbench/resolve-request';
-
-/**
- * Ceilings on what learning about the person costs. Familiarity is measured rather than
- * estimated (§3.5), and this is its price — paid once per resolve, not once per dial move.
- */
-const CONTEXT_LIMITS = {
-  savedTracks: 200,
-  topTracks: 100,
-  recentlyPlayed: 50,
-  followedArtists: 50,
-  playlistTracks: 400,
-} as const;
-
-/**
- * One source failing loses that source, not the resolve — a recipe can outlive a playlist. A
- * spent quota is different and ends the whole thing, because every further request would burn
- * budget that cannot succeed (§5.2).
- */
-async function attempt<T>(fallback: T, run: () => Promise<T>): Promise<T> {
-  try {
-    return await run();
-  } catch (cause) {
-    if (cause instanceof QuotaExceeded) throw cause;
-    return fallback;
-  }
-}
-
-async function resolveContext(
-  client: SpotifyClient,
-  request: ResolveRequest,
-): Promise<ContextPayload> {
-  const [saved, top, recent, followed] = await Promise.all([
-    attempt<readonly TrackId[]>([], async () =>
-      (await client.getSavedTracks({ maxItems: CONTEXT_LIMITS.savedTracks })).map(
-        (track) => track.id,
-      ),
-    ),
-    attempt<readonly TrackId[]>([], async () =>
-      (await client.getTopTracks('mediumTerm', { maxItems: CONTEXT_LIMITS.topTracks })).map(
-        (track) => track.id,
-      ),
-    ),
-    attempt<readonly TrackId[]>([], async () =>
-      (await client.getRecentlyPlayed({ maxItems: CONTEXT_LIMITS.recentlyPlayed })).map(
-        (track) => track.id,
-      ),
-    ),
-    attempt<readonly ArtistId[]>([], async () =>
-      (await client.getFollowedArtists({ maxItems: CONTEXT_LIMITS.followedArtists })).map(
-        (artist) => artist.id,
-      ),
-    ),
-  ]);
-
-  const playlists = await Promise.all(
-    request.excludedPlaylistIds.map(async (id) => ({
-      playlistId: id,
-      trackIds: await attempt<readonly TrackId[]>([], async () =>
-        (await client.getPlaylistTracks(id, { maxItems: CONTEXT_LIMITS.playlistTracks })).map(
-          (track) => track.id,
-        ),
-      ),
-    })),
-  );
-
-  return {
-    libraryTrackIds: saved,
-    topTrackIds: top,
-    recentlyHeardTrackIds: recent,
-    followedArtistIds: followed,
-    playlists,
-  };
-}
+import type { ResolveRequest } from '../workbench/resolve-request';
 
 export async function resolveWorkbench(request: ResolveRequest): Promise<ResolveOutcome> {
   const handle = await getSpotifyHandle();
