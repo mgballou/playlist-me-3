@@ -500,6 +500,19 @@ describe('paging', () => {
     expect(test.calls[0]?.url).toContain('time_range=medium_term');
   });
 
+  it('calls top tracks whole from the empty page after fifty, whatever the total says', async () => {
+    const fifty = Array.from({ length: 50 }, (_, index) =>
+      trackPayload({ id: `tr-${String(index)}` }),
+    );
+    const test = harness((_url, index) =>
+      index === 0
+        ? { json: pagePayload(fifty, { total: 200 }) }
+        : { json: pagePayload([], { total: 200 }) },
+    );
+    const { coverage } = await test.client.getTopTracks('mediumTerm', { maxItems: 100 });
+    expect(coverage).toEqual({ kind: 'whole', read: 50 });
+  });
+
   it('reads playlist items from the renamed path', async () => {
     const test = harness(() => ({ json: pagePayload([{ track: trackPayload() }]) }));
     await test.client.getPlaylistTracks(playlistId('pl-1'));
