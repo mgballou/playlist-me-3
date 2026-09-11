@@ -17,7 +17,7 @@
 
 import type { ArtistId, PlaylistId, SetCoverage } from '@pm/core';
 import { playlistId, unreachable } from '@pm/core';
-import { SEARCH_MAX_LIMIT, SpotifyError, demoCatalog } from '@pm/spotify';
+import { PAGE_MAX_LIMIT, SEARCH_MAX_LIMIT, SpotifyError, demoCatalog } from '@pm/spotify';
 
 import { getSpotifyHandle } from '../spotify/server';
 import type {
@@ -136,6 +136,12 @@ function playlistLength(coverage: SetCoverage): number {
 }
 
 /**
+ * One page, because the length is all a pasted link keeps and the first page carries it. It
+ * used to read four hundred tracks and throw them away — eight requests to learn one number.
+ */
+const PASTED_PLAYLIST_READ = PAGE_MAX_LIMIT;
+
+/**
  * A link, a URI or a bare id, confirmed by reading the thing. The read costs a request and
  * it is the same one the source or the exclusion would have spent anyway (§3.1).
  */
@@ -147,7 +153,7 @@ export async function lookupPlaylist(reference: string): Promise<CatalogLookup<P
 
   try {
     const handle = await getSpotifyHandle();
-    const read = await handle.client.getPlaylistTracks(id, { maxItems: 400 });
+    const read = await handle.client.getPlaylistTracks(id, { maxItems: PASTED_PLAYLIST_READ });
     const known = demoCatalog.playlists.find((list) => list.id === id);
     return {
       ok: true,
