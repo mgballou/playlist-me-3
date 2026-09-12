@@ -175,7 +175,7 @@ testable on its own.
 171 albums, 1,123 tracks. It backs demo mode, every integration test and the whole Playwright
 suite, which is why CI needs no credentials and no network.
 
-**1,420 unit tests across 41 files, 45 end-to-end tests across two viewports.** CI runs typecheck,
+**1,496 unit tests across 42 files, 53 end-to-end tests across two viewports.** CI runs typecheck,
 lint, tests and a production build, then runs the browser suite with no secrets configured — which
 is what proves the claim that a missing `SPOTIFY_CLIENT_ID` is demo mode and not a crash.
 
@@ -261,6 +261,13 @@ instead of turning up in a screenshot._
 
 _The highest-leverage screen in the app, and the one most often left blank. Every terminal state
 names the next thing to do._
+
+<img src="docs/assets/phone-connect-failed.png" alt="The bench on a phone, with a notice saying the sign-in did not finish and offering to reconnect" width="390" />
+
+_The same rule where it is hardest to keep: connecting is the one flow with no demo mode behind
+it. Both routes that can fail already computed a reason and put it in the URL, so the bench reads
+it, prints a sentence a person can act on, and takes the parameter back out — a reload lands on a
+plain bench rather than on last Tuesday's failure._
 
 **Not done:** a deployment. There is no hosted copy, and no link to one. The build is green and
 `vercel.json` points a host at `apps/web`, so what is left is account work — a Spotify app, a

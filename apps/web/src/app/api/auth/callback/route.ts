@@ -61,8 +61,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return fail(AuthHandoffFailed.stateMismatch());
   }
 
-  if (request.nextUrl.searchParams.get('error') !== null) {
-    return fail(AuthHandoffFailed.deniedByUser());
+  // `access_denied` is the person saying no, and it is the only value that means that.
+  // Everything else Spotify sends here — an invalid client id, a redirect URI that does not
+  // match the registration — is a refusal of the request, and telling someone they declined
+  // a screen they never reached is a lie the bench would then repeat.
+  const refusal = request.nextUrl.searchParams.get('error');
+  if (refusal !== null) {
+    return fail(
+      refusal === 'access_denied'
+        ? AuthHandoffFailed.deniedByUser()
+        : AuthHandoffFailed.authorizeRefused(),
+    );
   }
 
   const code = request.nextUrl.searchParams.get('code');

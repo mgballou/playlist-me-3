@@ -259,6 +259,12 @@ h4 {
   padding: var(--space-5);
 }
 
+/* How connecting failed, across the head of the desk. It belongs to no section, so it takes
+ * the full width above the two columns rather than sitting in one of them. §7 */
+.stage__notice {
+  grid-column: 1 / -1;
+}
+
 .rack,
 .deck {
   display: flex;

@@ -21,7 +21,14 @@
 
 import { AuthFailed, QuotaExceeded, RateLimited, SpotifyError } from '@pm/spotify';
 
-export type ErrorKind = 'rateLimited' | 'quotaExceeded' | 'tokenExpired' | 'failed';
+/**
+ * `connectionFailed` is the one kind `toErrorSurface` never returns: it comes from
+ * `errors/connection.ts`, which reads a reason off the URL rather than catching an error. The
+ * shape is shared on purpose — `ErrorNotice` is the notice this app has, and a second one for
+ * failures that arrive by redirect would be the same box drawn twice.
+ */
+export type ErrorKind =
+  'rateLimited' | 'quotaExceeded' | 'tokenExpired' | 'failed' | 'connectionFailed';
 
 /** What the interface should do next, decided here rather than in a component. */
 export type RetryPolicy = 'automatic' | 'never' | 'reconnect' | 'manual';
