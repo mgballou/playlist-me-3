@@ -1685,6 +1685,40 @@ h4 {
   font-size: var(--text-xs);
 }
 
+/* A read cut short. Type, not tone — this reports, it does not act, and §5 rule 4 keeps the
+   accent for the thing that does. */
+.report__notes,
+.report__reasons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.report__notes {
+  gap: var(--space-2);
+}
+
+.report__note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--surface-well);
+  box-shadow: var(--relief-well);
+}
+
+.report__note-source {
+  font-size: var(--text-xs);
+}
+
+.report__reason {
+  font-size: var(--text-xs);
+}
+
 /* ---------------------------------------------------------------------------
  * The overlay. Above the rack at --z-overlay, below the ledger, which nothing
  * may dim. §7
