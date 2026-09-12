@@ -31,7 +31,7 @@ shape.
 | **Shape**      | How many tracks, how many per artist, how they are ordered, and two dials: how familiar, and how deep into each catalog.                                            |
 
 Then you tinker. **Lock** a track and it holds its slot. **Reject** one and it never comes back.
-**Re-roll** and everything else turns over.
+**Re-roll** and everything else turns over. All three survive a reload and travel in a link.
 
 ![The deck, with slot one locked: numbered slots, each with a lock and a reject.](docs/assets/deck.png)
 
@@ -40,9 +40,10 @@ network. The locked slot holding still while the rest turn over is the whole dem
 recipe plus a seed reproduces a playlist exactly.
 
 Recipes save to your browser, export as JSON, and encode into a shareable link. A link carries the
-recipe, the seed and the locks — the deck itself, so two people open it and see the same playlist.
-It also carries a stamp of the pool it was built from: when the sources have moved since the link
-was made, the deck says it was rebuilt rather than reproduced. There is no database.
+recipe, the seed, the locks and the tracks you banished — the deck itself, so two people open it
+and see the same playlist. It also carries a stamp of the pool it was built from: when the sources
+have moved since the link was made, the deck says it was rebuilt rather than reproduced. A link
+with twenty rejects in it runs to about 900 characters. There is no database.
 
 ### On a phone
 
@@ -73,7 +74,7 @@ copy above was opaque, this is the decoder ring.
 | **Pool**      | Every track the sources resolved to, before shaping. Resolving costs requests; shaping costs nothing.                 | `TrackPool` — `core/src/domain.ts`      |
 | **Deck**      | The playlist as it currently stands, and the only thing that gets written to Spotify.                                 | `BuildResult` — `core/src/build.ts`     |
 | **Seed**      | One number. A recipe plus a seed is a complete description of a playlist, which is the entire share-by-link feature.  | `BuildInput.seed` — `core/src/build.ts` |
-| **Link**      | A recipe, a seed, the locks and a stamp of the pool, in one base64url string. Opened twice, it gives the same deck.   | `encodeShare` — `core/src/serialize.ts` |
+| **Link**      | A recipe, a seed, the locks, the rejects and a pool stamp, in one base64url string. Opened twice, same deck.          | `encodeShare` — `core/src/serialize.ts` |
 | **Stamp**     | A fingerprint of the pool a deck was built from. What lets a link tell a reproduced deck from a rebuilt one.          | `poolStamp` — `core/src/domain.ts`      |
 | **Lock**      | A track pinned to a slot index. Resolved twice: for membership in `select`, for position after `order`.               | `Lock` — `core/src/domain.ts`           |
 | **Re-roll**   | The same `build` call with a new seed and the same locks. There is no second selection path.                          | `build` — `core/src/build.ts`           |
@@ -174,7 +175,7 @@ testable on its own.
 171 albums, 1,123 tracks. It backs demo mode, every integration test and the whole Playwright
 suite, which is why CI needs no credentials and no network.
 
-**1,406 unit tests across 41 files, 44 end-to-end tests across two viewports.** CI runs typecheck,
+**1,420 unit tests across 41 files, 45 end-to-end tests across two viewports.** CI runs typecheck,
 lint, tests and a production build, then runs the browser suite with no secrets configured — which
 is what proves the claim that a missing `SPOTIFY_CLIENT_ID` is demo mode and not a crash.
 

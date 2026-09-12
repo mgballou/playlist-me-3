@@ -10,8 +10,9 @@
  * - **Building is a `useMemo`.** Re-roll is a new seed, lock is a longer lock list, reject is
  *   a bigger banished set — all three are the same pure call over the pool already in hand,
  *   so all three are instant and none of them costs a request (ui-sensibility §2.10).
- * - **The recipe and the seed survive a reload** (§2.5), because the seed is one number and
- *   it reproduces the build exactly.
+ * - **The recipe, the seed and the tinkering survive a reload** (§2.5). The seed reproduces
+ *   the build exactly, but only over the same locks and the same rejects — they are build
+ *   input, so holding the seed without them held a different deck.
  *
  * There is no business logic in any component. Components render this state and dispatch
  * these intents.
@@ -146,10 +147,12 @@ export function useWorkbenchState(): Workbench {
       if (shared !== null && shared.ok) {
         if (!cancelled) {
           setRecipeState(shared.value.recipe);
-          // The seed and the locks are the deck. A link without them was a link to a
-          // different playlist on every load, which is the bug this branch exists to fix.
+          // The seed, the locks and the rejects are the deck. A link missing any of them was
+          // a link to a different playlist, and the pool stamp cannot catch a missing reject
+          // because the pool is the one that was shared.
           setSeed(shared.value.seed ?? mintSeed());
           setLocks(shared.value.locks);
+          setRejects(new Set(shared.value.rejects));
           setSharedStamp(shared.value.poolStamp);
           setRestored(true);
         }
@@ -160,6 +163,8 @@ export function useWorkbenchState(): Workbench {
       if (place !== null) {
         setRecipeState(place.recipe);
         setSeed(place.seed);
+        setLocks(place.locks);
+        setRejects(new Set(place.rejects));
       } else {
         setRecipeState(defaultRecipe(recipeId(crypto.randomUUID())));
         setSeed(mintSeed());
@@ -173,10 +178,12 @@ export function useWorkbenchState(): Workbench {
 
   useEffect(() => {
     if (!restored) return;
-    void savePlace({ store: store(), recipe, seed, savedAt: Date.now() }).catch(() => {
-      // Storage refused. The app still works; it just forgets. §2.7 — not a dead end.
-    });
-  }, [restored, recipe, seed]);
+    void savePlace({ store: store(), recipe, seed, locks, rejects, savedAt: Date.now() }).catch(
+      () => {
+        // Storage refused. The app still works; it just forgets. §2.7 — not a dead end.
+      },
+    );
+  }, [restored, recipe, seed, locks, rejects]);
 
   const request = useMemo(() => toResolveRequest(recipe), [recipe]);
   const key = resolveKey(request);

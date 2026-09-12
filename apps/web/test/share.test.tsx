@@ -71,7 +71,7 @@ const RECIPE = (() => {
 })();
 
 function linkWithStamp(stamp: string): string {
-  return `/?r=${encodeShare({ recipe: RECIPE, seed: 99, locks: [], poolStamp: stamp })}`;
+  return `/?r=${encodeShare({ recipe: RECIPE, seed: 99, locks: [], rejects: [], poolStamp: stamp })}`;
 }
 
 function rebuiltNotice(): HTMLElement | null {
@@ -146,6 +146,48 @@ describe('a shared link reproduces the deck', () => {
     await user.click(screen.getByRole('button', { name: 'Re-roll' }));
 
     expect(slotTitles()[0]).toBe(held);
+  });
+});
+
+/**
+ * Finding 2 of the 9 September hostile read, through the app the person actually uses. The
+ * pool is the same pool, so the stamp matched and the bench claimed the deck was exact while
+ * the three banished tracks sat back in it.
+ */
+describe('a shared link carries what was banished', () => {
+  async function banishThree(user: ReturnType<typeof userEvent.setup>): Promise<readonly string[]> {
+    const gone: string[] = [];
+    for (let round = 0; round < 3; round += 1) {
+      const title = slotTitles()[0] ?? '';
+      gone.push(title);
+      await user.click(screen.getByRole('button', { name: `Reject ${title}` }));
+    }
+    return gone;
+  }
+
+  it('opens on the same slots the sharer was looking at', async () => {
+    const user = userEvent.setup();
+    await openApp(`/?r=${ENCODED}`);
+    await banishThree(user);
+    const mine = slotTitles();
+    const link = await copyLink(user);
+    cleanup();
+
+    await openApp(link.slice(link.indexOf('?')));
+
+    expect(slotTitles()).toEqual(mine);
+  });
+
+  it('leaves the banished tracks out on the far side', async () => {
+    const user = userEvent.setup();
+    await openApp(`/?r=${ENCODED}`);
+    const gone = await banishThree(user);
+    const link = await copyLink(user);
+    cleanup();
+
+    await openApp(link.slice(link.indexOf('?')));
+
+    expect(slotTitles().filter((title) => gone.includes(title))).toEqual([]);
   });
 });
 
