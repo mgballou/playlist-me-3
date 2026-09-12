@@ -121,6 +121,7 @@ There is no client secret. The app uses Authorization Code with PKCE, which does
 ```bash
 pnpm dev            # web app
 pnpm test           # vitest, all packages
+pnpm --filter @pm/web exec playwright install chromium   # once, before the first e2e run
 pnpm test:e2e       # playwright, against demo mode
 pnpm typecheck      # tsc --noEmit across the workspace
 pnpm lint           # eslint + prettier
@@ -128,6 +129,10 @@ pnpm fix            # autofix both
 pnpm check          # typecheck + lint + test
 pnpm shots          # re-capture the screenshots in this file
 ```
+
+`pnpm dev` and the browser suite both want **port 3000**, which is also the port the redirect URI
+registers. The suite reuses a server already on it rather than starting its own, so a `pnpm dev`
+left running is what it ends up testing.
 
 ---
 
@@ -218,13 +223,14 @@ control, never behind a tooltip.
 - **The live and remix filter is a title heuristic.** It matches `Live`, `Remix`, `Remaster` and
   friends in suffix position. It will miss a live album nobody labelled.
 
-**Familiarity, by contrast, is exact.** It is set membership in your own library, top tracks and
-follows, so the interface says so plainly rather than hedging about it.
+**Familiarity is exact up to a point.** It is set membership in your own library, top tracks and
+follows, with no estimate in it — but one resolve reads only the first 200 saved tracks and the
+first 50 follows, so past that a library has a tail that reads as unfamiliar when it is not.
 
 Other limits worth knowing: development mode caps the app at five users, `search` returns ten
-results per request so large pools cost many requests (the app shows you the cost before it spends
-it), and artist similarity is inferred from who appears on albums together, since Spotify's own
-similarity graph is no longer exposed.
+results per request so large pools cost many requests (the ledger prints what a resolve cost after
+it runs, and there is no estimate before it), and artist similarity is inferred from who appears on
+albums together, since Spotify's own similarity graph is no longer exposed.
 
 ---
 
