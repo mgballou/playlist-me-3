@@ -13,7 +13,10 @@
  *    track appearing twice under two indices would quietly corrupt both.
  * 3. **Every source reports what it cost and what it hit.** A source that returned nothing
  *    and a source that ran into Spotify's offset ceiling look identical in a pool and
- *    completely different to a person trying to work out why their recipe is thin.
+ *    completely different to a person trying to work out why their recipe is thin. A source
+ *    that stopped because *we* told it to is the third case and the worst of them, because
+ *    the budget that stopped it is ours: nothing in the pool, and until now nothing in the
+ *    report, said a search that matched 884 tracks had been cut off at 100 of them.
  */
 
 import type {
@@ -42,8 +45,20 @@ import { withArtistGenres, withSourceIndex } from './map';
 export type ResolveLimits = {
   readonly maxTracksPerSource: number;
   readonly maxAlbumsPerArtist: number;
+  /**
+   * Albums one album search may keep. Each costs a `GET /albums/{id}/tracks` on top of the
+   * search, so this is the dearest of the ceilings — and it is set to reach
+   * `maxTracksPerSource` at roughly ten tracks an album rather than to stop half way and
+   * say nothing.
+   */
   readonly maxAlbumsPerSearch: number;
   readonly maxArtistsPerSource: number;
+  /**
+   * Pages one search may read. `maxSearchPages * searchPageSize` is the real track ceiling
+   * on a search source, so it agrees with `maxTracksPerSource` instead of contradicting it:
+   * ten pages of ten stopped a four-hundred-track budget at a hundred and reported no limit
+   * at all.
+   */
   readonly maxSearchPages: number;
   /** Never above `SEARCH_MAX_LIMIT`; search refuses more. §5.1.1 */
   readonly searchPageSize: number;
@@ -54,9 +69,9 @@ export type ResolveLimits = {
 export const DEFAULT_RESOLVE_LIMITS: ResolveLimits = {
   maxTracksPerSource: 400,
   maxAlbumsPerArtist: 12,
-  maxAlbumsPerSearch: 20,
+  maxAlbumsPerSearch: 40,
   maxArtistsPerSource: 12,
-  maxSearchPages: 10,
+  maxSearchPages: 40,
   searchPageSize: SEARCH_MAX_LIMIT,
   maxArtistGenreLookups: 60,
 };
@@ -73,6 +88,10 @@ export type SourceReport = {
   readonly requests: number;
   /** Paging stopped at Spotify's 1,000-result ceiling rather than at the end. §2.2.1 */
   readonly hitOffsetCeiling: boolean;
+  /** Paging stopped at `maxSearchPages` with a page still waiting. Our budget, not Spotify's. */
+  readonly hitPageLimit: boolean;
+  /** An album search stopped at `maxAlbumsPerSearch`, so albums went unread. */
+  readonly hitAlbumLimit: boolean;
   /** Paging stopped at `maxTracksPerSource`, so there is more to be had for more requests. */
   readonly hitTrackLimit: boolean;
   /** The source ran and produced nothing. Worth saying out loud on the bench. */
@@ -111,16 +130,24 @@ export type ResolveInput = {
 type SourceResult = {
   readonly tracks: readonly CatalogTrack[];
   readonly hitOffsetCeiling: boolean;
+  readonly hitPageLimit: boolean;
+  readonly hitAlbumLimit: boolean;
   readonly hitTrackLimit: boolean;
 };
 
-function result(
-  tracks: readonly CatalogTrack[],
-  flags: { readonly hitOffsetCeiling?: boolean; readonly hitTrackLimit?: boolean } = {},
-): SourceResult {
+type ResultFlags = {
+  readonly hitOffsetCeiling?: boolean;
+  readonly hitPageLimit?: boolean;
+  readonly hitAlbumLimit?: boolean;
+  readonly hitTrackLimit?: boolean;
+};
+
+function result(tracks: readonly CatalogTrack[], flags: ResultFlags = {}): SourceResult {
   return {
     tracks,
     hitOffsetCeiling: flags.hitOffsetCeiling ?? false,
+    hitPageLimit: flags.hitPageLimit ?? false,
+    hitAlbumLimit: flags.hitAlbumLimit ?? false,
     hitTrackLimit: flags.hitTrackLimit ?? false,
   };
 }
@@ -175,6 +202,8 @@ export async function resolveSources({
       duplicates: found.tracks.length - contributed,
       requests: client.requests.snapshot().total - before,
       hitOffsetCeiling: found.hitOffsetCeiling,
+      hitPageLimit: found.hitPageLimit,
+      hitAlbumLimit: found.hitAlbumLimit,
       hitTrackLimit: found.hitTrackLimit,
       empty: found.tracks.length === 0 && failure === null,
       failure,
@@ -357,8 +386,17 @@ async function fromTrackSearch(args: {
   const tracks: CatalogTrack[] = [];
   let offset = 0;
   let hitOffsetCeiling = false;
+  let hitPageLimit = false;
+  let hitTrackLimit = false;
 
-  for (let page = 0; page < budget.maxSearchPages; page += 1) {
+  // The page cap is tested at the top rather than in the loop header, because reaching it is
+  // a fact the report has to carry. Every other exit already broke on a reason.
+  for (let page = 0; ; page += 1) {
+    if (page >= budget.maxSearchPages) {
+      hitPageLimit = true;
+      break;
+    }
+
     const found = await client.searchTracks(
       {
         terms: source.query,
@@ -377,14 +415,16 @@ async function fromTrackSearch(args: {
     }
     if (found.nextOffset === null) break;
     if (tracks.length >= budget.maxTracksPerSource) {
-      return result(tracks.slice(0, budget.maxTracksPerSource), { hitTrackLimit: true });
+      hitTrackLimit = true;
+      break;
     }
     offset = found.nextOffset;
   }
 
   return result(tracks.slice(0, budget.maxTracksPerSource), {
     hitOffsetCeiling,
-    hitTrackLimit: tracks.length > budget.maxTracksPerSource,
+    hitPageLimit,
+    hitTrackLimit: hitTrackLimit || tracks.length > budget.maxTracksPerSource,
   });
 }
 
@@ -415,6 +455,8 @@ async function fromObscureSearch(args: {
   const tracks = await collectAlbumTracks(client, albums.ids, options, budget);
   return result(tracks.tracks, {
     hitOffsetCeiling: albums.hitOffsetCeiling,
+    hitPageLimit: albums.hitPageLimit,
+    hitAlbumLimit: albums.hitAlbumLimit,
     hitTrackLimit: tracks.hitTrackLimit,
   });
 }
@@ -436,10 +478,25 @@ async function fromNewReleases(args: {
   const tracks = await collectAlbumTracks(args.client, albums.ids, args.options, args.budget);
   return result(tracks.tracks, {
     hitOffsetCeiling: albums.hitOffsetCeiling,
+    hitPageLimit: albums.hitPageLimit,
+    hitAlbumLimit: albums.hitAlbumLimit,
     hitTrackLimit: tracks.hitTrackLimit,
   });
 }
 
+type AlbumPage = {
+  readonly ids: readonly AlbumId[];
+  readonly hitOffsetCeiling: boolean;
+  readonly hitPageLimit: boolean;
+  readonly hitAlbumLimit: boolean;
+};
+
+/**
+ * Paging an album search, which stops for four different reasons and used to admit to one.
+ * The album cap is the one that bites: it is reached with a page still waiting, or by a page
+ * that overshot it and had its tail sliced off, and either way albums that matched were
+ * never read.
+ */
 async function pageAlbums(args: {
   readonly client: SpotifyClient;
   readonly terms: string;
@@ -447,13 +504,20 @@ async function pageAlbums(args: {
   readonly years?: YearRange | undefined;
   readonly options: RequestOptions;
   readonly budget: ResolveLimits;
-}): Promise<{ readonly ids: readonly AlbumId[]; readonly hitOffsetCeiling: boolean }> {
+}): Promise<AlbumPage> {
+  const cap = args.budget.maxAlbumsPerSearch;
   const ids: AlbumId[] = [];
   let offset = 0;
   let hitOffsetCeiling = false;
+  let hitPageLimit = false;
+  let hitAlbumLimit = false;
 
-  for (let page = 0; page < args.budget.maxSearchPages; page += 1) {
-    if (ids.length >= args.budget.maxAlbumsPerSearch) break;
+  for (let page = 0; ; page += 1) {
+    if (page >= args.budget.maxSearchPages) {
+      hitPageLimit = true;
+      break;
+    }
+
     const found = await args.client.searchAlbums(
       {
         terms: args.terms,
@@ -466,15 +530,16 @@ async function pageAlbums(args: {
     );
     ids.push(...found.items.map((album) => album.id));
 
-    if (found.atOffsetCeiling) {
-      hitOffsetCeiling = true;
+    if (found.atOffsetCeiling) hitOffsetCeiling = true;
+    if (ids.length > cap || (ids.length === cap && found.nextOffset !== null)) {
+      hitAlbumLimit = true;
       break;
     }
     if (found.nextOffset === null) break;
     offset = found.nextOffset;
   }
 
-  return { ids: ids.slice(0, args.budget.maxAlbumsPerSearch), hitOffsetCeiling };
+  return { ids: ids.slice(0, cap), hitOffsetCeiling, hitPageLimit, hitAlbumLimit };
 }
 
 /** Followed artists, each walked to the depth the source asked for. */

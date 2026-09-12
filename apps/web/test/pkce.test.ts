@@ -171,6 +171,43 @@ describe('the callback', () => {
     vi.unstubAllEnvs();
   });
 
+  function reasonOf(response: Response): string | null {
+    return new URL(response.headers.get('location') ?? '').searchParams.get('auth');
+  }
+
+  it('reads access_denied as the person declining', async () => {
+    for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
+
+    const response = await callback(
+      request('?error=access_denied&state=s', { [STATE_COOKIE]: 's', [VERIFIER_COOKIE]: 'v' }),
+    );
+
+    expect(reasonOf(response)).toBe('deniedByUser');
+    vi.unstubAllEnvs();
+  });
+
+  it('does not read any other refusal as the person declining', async () => {
+    for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
+
+    const response = await callback(
+      request('?error=invalid_client&state=s', { [STATE_COOKIE]: 's', [VERIFIER_COOKIE]: 'v' }),
+    );
+
+    expect(reasonOf(response)).toBe('authorizeRefused');
+    vi.unstubAllEnvs();
+  });
+
+  it('never puts the refusal Spotify sent in the URL it hands the bench', async () => {
+    for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
+
+    const response = await callback(
+      request('?error=invalid_client&state=s', { [STATE_COOKIE]: 's', [VERIFIER_COOKIE]: 'v' }),
+    );
+
+    expect(response.headers.get('location')).not.toContain('invalid_client');
+    vi.unstubAllEnvs();
+  });
+
   it('runs demo mode rather than failing when nothing is configured', async () => {
     vi.stubEnv('SPOTIFY_CLIENT_ID', '');
     vi.stubEnv('SESSION_SECRET', '');

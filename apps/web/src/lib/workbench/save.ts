@@ -1,6 +1,13 @@
 /**
  * What writing a playlist takes, and what it hands back. Types only — the action itself is
  * `actions/save.ts`, and a `'use server'` module may export nothing but async functions.
+ *
+ * **There are three outcomes, not two.** A save that creates the playlist and then fails on
+ * the second batch of tracks has not failed: a playlist exists, it holds the tracks the
+ * batches before it wrote, and it is on the account whether the app admits it or not.
+ * Reporting that as `failed` threw away the id, the link and the count, and left the person
+ * looking for a playlist the interface had just denied making. So `partial` is its own arm,
+ * carrying everything needed to say "a hundred of two hundred and fifty written, here it is".
  */
 
 import type { TrackId } from '@pm/core';
@@ -18,7 +25,7 @@ export type SaveRequest = {
 
 export type SaveOutcome =
   | {
-      readonly ok: true;
+      readonly kind: 'written';
       readonly playlistId: string;
       /** Null in demo mode, where the id names nothing on Spotify. §12.1 — no false links. */
       readonly url: string | null;
@@ -30,4 +37,21 @@ export type SaveOutcome =
       readonly mode: 'live' | 'demo';
       readonly requests: number;
     }
-  | { readonly ok: false; readonly error: ErrorSurface };
+  | {
+      readonly kind: 'partial';
+      /** The playlist exists. It is not deleted, and this is where it is. */
+      readonly playlistId: string;
+      /** Null in demo mode, as above. */
+      readonly url: string | null;
+      /** Tracks actually written — the batches that went through, summed. */
+      readonly added: number;
+      /** Tracks the save was asked for, so the interface can say "100 of 250". */
+      readonly requested: number;
+      readonly batches: number;
+      readonly batchesPlanned: number;
+      /** Why it stopped. The same surface a total failure carries, and it names the way out. */
+      readonly error: ErrorSurface;
+      readonly mode: 'live' | 'demo';
+      readonly requests: number;
+    }
+  | { readonly kind: 'failed'; readonly error: ErrorSurface };

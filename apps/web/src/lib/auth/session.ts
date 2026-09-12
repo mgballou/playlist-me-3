@@ -1,7 +1,7 @@
 /**
  * The session: Spotify's tokens, sealed in an encrypted cookie. Spec §5.3, §5.3.1.
  *
- * Two decisions here are load-bearing.
+ * Three decisions here are load-bearing.
  *
  * **Encrypted, not signed.** A signed cookie is readable by anyone holding it; these are
  * bearer tokens for someone's music account. `jose`'s JWE with `dir` + `A256GCM` over a key
@@ -11,6 +11,11 @@
  * refresh token" — when it does not, the existing one keeps working. `applyRefresh` is the
  * one place that decides, it is pure, and it is tested, because handling only the rotating
  * case is the bug that logs everyone out an hour in.
+ *
+ * **The session carries an id that is not a token.** `sid` is a random label minted at login
+ * and carried across every refresh. It names the person to the server's own caches
+ * (`../spotify/session-cache`) without a token ever being used as a key, and it survives a
+ * rotation, which a refresh token does not.
  */
 
 import { EncryptJWT, jwtDecrypt } from 'jose';
@@ -19,6 +24,11 @@ import { z } from 'zod';
 import type { TokenGrant } from './tokens';
 
 export type Session = {
+  /**
+   * An opaque random id for this session, or `null` for a cookie minted before sessions
+   * carried one. Never a credential: it identifies, it does not authorize.
+   */
+  readonly sid: string | null;
   readonly accessToken: string;
   readonly refreshToken: string;
   /** Epoch milliseconds. Absolute, so a cookie that sat in a closed laptop is still right. */
@@ -39,9 +49,19 @@ const claimsSchema = z.object({
   rt: z.string().min(1),
   xa: z.number().finite(),
   sc: z.string(),
+  /** Optional, so a cookie sealed before sessions had an id still opens. */
+  sid: z.string().min(1).optional(),
 });
 
 const ENCRYPTION = { alg: 'dir', enc: 'A256GCM' } as const;
+
+/**
+ * A fresh session id. Random rather than derived from anything about the person, so that
+ * holding one tells you nothing and two people can never collide into one cache.
+ */
+export function newSessionId(): string {
+  return globalThis.crypto.randomUUID();
+}
 
 /** A256GCM wants exactly 32 bytes, and a passphrase is not one. */
 async function keyOf(secret: string): Promise<Uint8Array> {
@@ -60,6 +80,7 @@ export async function sealSession(
     rt: session.refreshToken,
     xa: session.expiresAt,
     sc: session.scope,
+    ...(session.sid === null ? {} : { sid: session.sid }),
   })
     .setProtectedHeader(ENCRYPTION)
     .setIssuedAt(Math.floor(nowMs / 1000))
@@ -79,6 +100,7 @@ export async function openSession(sealed: string, secret: string): Promise<Sessi
     const claims = claimsSchema.safeParse(payload);
     if (!claims.success) return null;
     return {
+      sid: claims.data.sid ?? null,
       accessToken: claims.data.at,
       refreshToken: claims.data.rt,
       expiresAt: claims.data.xa,
@@ -97,7 +119,10 @@ export function needsRefresh(session: Session, nowMs: number): boolean {
   return session.expiresAt - nowMs <= REFRESH_MARGIN_MS;
 }
 
-/** A grant plus the session it renews. The refresh token survives its own absence. §5.3.1 */
+/**
+ * A grant plus the session it renews. The refresh token survives its own absence (§5.3.1),
+ * and so does the session id — a rotation must not look like a different person.
+ */
 export function applyRefresh(args: {
   readonly session: Session;
   readonly grant: TokenGrant;
@@ -105,6 +130,7 @@ export function applyRefresh(args: {
 }): Session {
   const { session, grant, nowMs } = args;
   return {
+    sid: session.sid,
     accessToken: grant.accessToken,
     refreshToken: grant.refreshToken ?? session.refreshToken,
     expiresAt: nowMs + grant.expiresInSeconds * 1000,
@@ -112,14 +138,20 @@ export function applyRefresh(args: {
   };
 }
 
-/** The first session, from the authorization code exchange. There, a refresh token is required. */
+/**
+ * The first session, from the authorization code exchange. There, a refresh token is
+ * required. The id comes in as an argument rather than being minted here, so this stays a
+ * pure function of what it is given.
+ */
 export function sessionFromGrant(args: {
   readonly grant: TokenGrant;
   readonly nowMs: number;
+  readonly sid: string;
 }): Session | null {
   const { grant, nowMs } = args;
   if (grant.refreshToken === null) return null;
   return {
+    sid: args.sid,
     accessToken: grant.accessToken,
     refreshToken: grant.refreshToken,
     expiresAt: nowMs + grant.expiresInSeconds * 1000,

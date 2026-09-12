@@ -31,7 +31,7 @@ shape.
 | **Shape**      | How many tracks, how many per artist, how they are ordered, and two dials: how familiar, and how deep into each catalog.                                            |
 
 Then you tinker. **Lock** a track and it holds its slot. **Reject** one and it never comes back.
-**Re-roll** and everything else turns over.
+**Re-roll** and everything else turns over. All three survive a reload and travel in a link.
 
 ![The deck, with slot one locked: numbered slots, each with a lock and a reject.](docs/assets/deck.png)
 
@@ -40,9 +40,10 @@ network. The locked slot holding still while the rest turn over is the whole dem
 recipe plus a seed reproduces a playlist exactly.
 
 Recipes save to your browser, export as JSON, and encode into a shareable link. A link carries the
-recipe, the seed and the locks — the deck itself, so two people open it and see the same playlist.
-It also carries a stamp of the pool it was built from: when the sources have moved since the link
-was made, the deck says it was rebuilt rather than reproduced. There is no database.
+recipe, the seed, the locks and the tracks you banished — the deck itself, so two people open it
+and see the same playlist. It also carries a stamp of the pool it was built from: when the sources
+have moved since the link was made, the deck says it was rebuilt rather than reproduced. A link
+with twenty rejects in it runs to about 900 characters. There is no database.
 
 ### On a phone
 
@@ -73,7 +74,7 @@ copy above was opaque, this is the decoder ring.
 | **Pool**      | Every track the sources resolved to, before shaping. Resolving costs requests; shaping costs nothing.                 | `TrackPool` — `core/src/domain.ts`      |
 | **Deck**      | The playlist as it currently stands, and the only thing that gets written to Spotify.                                 | `BuildResult` — `core/src/build.ts`     |
 | **Seed**      | One number. A recipe plus a seed is a complete description of a playlist, which is the entire share-by-link feature.  | `BuildInput.seed` — `core/src/build.ts` |
-| **Link**      | A recipe, a seed, the locks and a stamp of the pool, in one base64url string. Opened twice, it gives the same deck.   | `encodeShare` — `core/src/serialize.ts` |
+| **Link**      | A recipe, a seed, the locks, the rejects and a pool stamp, in one base64url string. Opened twice, same deck.          | `encodeShare` — `core/src/serialize.ts` |
 | **Stamp**     | A fingerprint of the pool a deck was built from. What lets a link tell a reproduced deck from a rebuilt one.          | `poolStamp` — `core/src/domain.ts`      |
 | **Lock**      | A track pinned to a slot index. Resolved twice: for membership in `select`, for position after `order`.               | `Lock` — `core/src/domain.ts`           |
 | **Re-roll**   | The same `build` call with a new seed and the same locks. There is no second selection path.                          | `build` — `core/src/build.ts`           |
@@ -120,6 +121,7 @@ There is no client secret. The app uses Authorization Code with PKCE, which does
 ```bash
 pnpm dev            # web app
 pnpm test           # vitest, all packages
+pnpm --filter @pm/web exec playwright install chromium   # once, before the first e2e run
 pnpm test:e2e       # playwright, against demo mode
 pnpm typecheck      # tsc --noEmit across the workspace
 pnpm lint           # eslint + prettier
@@ -127,6 +129,10 @@ pnpm fix            # autofix both
 pnpm check          # typecheck + lint + test
 pnpm shots          # re-capture the screenshots in this file
 ```
+
+`pnpm dev` and the browser suite both want **port 3000**, which is also the port the redirect URI
+registers. The suite reuses a server already on it rather than starting its own, so a `pnpm dev`
+left running is what it ends up testing.
 
 ---
 
@@ -174,7 +180,7 @@ testable on its own.
 171 albums, 1,123 tracks. It backs demo mode, every integration test and the whole Playwright
 suite, which is why CI needs no credentials and no network.
 
-**1,406 unit tests across 41 files, 44 end-to-end tests across two viewports.** CI runs typecheck,
+**1,582 unit tests across 48 files, 53 end-to-end tests across two viewports.** CI runs typecheck,
 lint, tests and a production build, then runs the browser suite with no secrets configured — which
 is what proves the claim that a missing `SPOTIFY_CLIENT_ID` is demo mode and not a crash.
 
@@ -217,13 +223,14 @@ control, never behind a tooltip.
 - **The live and remix filter is a title heuristic.** It matches `Live`, `Remix`, `Remaster` and
   friends in suffix position. It will miss a live album nobody labelled.
 
-**Familiarity, by contrast, is exact.** It is set membership in your own library, top tracks and
-follows, so the interface says so plainly rather than hedging about it.
+**Familiarity is exact up to a point.** It is set membership in your own library, top tracks and
+follows, with no estimate in it — but one resolve reads only the first 200 saved tracks and the
+first 50 follows, so past that a library has a tail that reads as unfamiliar when it is not.
 
 Other limits worth knowing: development mode caps the app at five users, `search` returns ten
-results per request so large pools cost many requests (the app shows you the cost before it spends
-it), and artist similarity is inferred from who appears on albums together, since Spotify's own
-similarity graph is no longer exposed.
+results per request so large pools cost many requests (the ledger prints what a resolve cost after
+it runs, and there is no estimate before it), and artist similarity is inferred from who appears on
+albums together, since Spotify's own similarity graph is no longer exposed.
 
 ---
 
@@ -261,6 +268,13 @@ instead of turning up in a screenshot._
 _The highest-leverage screen in the app, and the one most often left blank. Every terminal state
 names the next thing to do._
 
+<img src="docs/assets/phone-connect-failed.png" alt="The bench on a phone, with a notice saying the sign-in did not finish and offering to reconnect" width="390" />
+
+_The same rule where it is hardest to keep: connecting is the one flow with no demo mode behind
+it. Both routes that can fail already computed a reason and put it in the URL, so the bench reads
+it, prints a sentence a person can act on, and takes the parameter back out — a reload lands on a
+plain bench rather than on last Tuesday's failure._
+
 **Not done:** a deployment. There is no hosted copy, and no link to one. The build is green and
 `vercel.json` points a host at `apps/web`, so what is left is account work — a Spotify app, a
 session secret, and the callback URL registered on Spotify's dashboard.
@@ -275,6 +289,8 @@ session secret, and the callback URL registered on Spotify's dashboard.
 2. [**`CLAUDE.md`**](CLAUDE.md) — how to write code here. The engine's four rules, in full.
 3. [**`docs/ui-sensibility.md`**](docs/ui-sensibility.md) — the interface rules, why the Console
    direction won, and what the first attempt got wrong. Normative for `apps/web`.
+4. [**`docs/read-once.md`**](docs/read-once.md) — what a resolve costs, what the session cache
+   holds, how it is keyed to one person and how long it keeps anything.
 
 ---
 
