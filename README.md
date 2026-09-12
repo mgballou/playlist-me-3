@@ -175,7 +175,7 @@ testable on its own.
 171 albums, 1,123 tracks. It backs demo mode, every integration test and the whole Playwright
 suite, which is why CI needs no credentials and no network.
 
-**1,546 unit tests across 45 files, 53 end-to-end tests across two viewports.** CI runs typecheck,
+**1,582 unit tests across 48 files, 53 end-to-end tests across two viewports.** CI runs typecheck,
 lint, tests and a production build, then runs the browser suite with no secrets configured — which
 is what proves the claim that a missing `SPOTIFY_CLIENT_ID` is demo mode and not a crash.
 
@@ -283,6 +283,8 @@ session secret, and the callback URL registered on Spotify's dashboard.
 2. [**`CLAUDE.md`**](CLAUDE.md) — how to write code here. The engine's four rules, in full.
 3. [**`docs/ui-sensibility.md`**](docs/ui-sensibility.md) — the interface rules, why the Console
    direction won, and what the first attempt got wrong. Normative for `apps/web`.
+4. [**`docs/read-once.md`**](docs/read-once.md) — what a resolve costs, what the session cache
+   holds, how it is keyed to one person and how long it keeps anything.
 
 ---
 

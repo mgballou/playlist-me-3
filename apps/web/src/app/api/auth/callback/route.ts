@@ -23,7 +23,7 @@ import {
   sessionCookieOptions,
 } from '@/lib/auth/cookies';
 import { statesMatch } from '@/lib/auth/pkce';
-import { sealSession, sessionFromGrant } from '@/lib/auth/session';
+import { newSessionId, sealSession, sessionFromGrant } from '@/lib/auth/session';
 import { exchangeCode } from '@/lib/auth/tokens';
 import { AuthHandoffFailed } from '@/lib/errors/auth';
 import { isSecureOrigin, readSpotifyEnv, redirectUriFor } from '@/lib/env';
@@ -88,7 +88,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   });
   if (!exchanged.ok) return fail(exchanged.error);
 
-  const session = sessionFromGrant({ grant: exchanged.value, nowMs: Date.now() });
+  const session = sessionFromGrant({
+    grant: exchanged.value,
+    nowMs: Date.now(),
+    sid: newSessionId(),
+  });
   if (session === null) return fail(AuthHandoffFailed.noRefreshToken());
 
   const sealed = await sealSession(session, reading.env.sessionSecret);

@@ -10,16 +10,23 @@
  * The token provider refreshes **server-side, ahead of expiry, on demand** (§5.3.1), and
  * dedupes: the live client fires many small requests through a concurrency limiter, and each
  * one asks for a token, so a naive provider would start a dozen refreshes at once.
+ *
+ * **A live client is handed the caller's own stores.** A server action builds a client, spends
+ * it and drops it, so a client that owns its cache starts every resolve cold and reads the
+ * whole person again. `caches` is where that store comes from, and it is chosen by the
+ * session id — see `./session-cache`. Demo mode is given none: there is no person to key one
+ * to, and the fake is a fixture rather than a network.
  */
 
-import type { SpotifyClient } from '@pm/spotify';
-import { AuthFailed, FakeSpotifyClient, LiveSpotifyClient } from '@pm/spotify';
+import type { FetchLike, SpotifyClient } from '@pm/spotify';
+import { AuthFailed, CachedSpotifyClient, FakeSpotifyClient, LiveSpotifyClient } from '@pm/spotify';
 
 import type { Session } from '../auth/session';
 import { applyRefresh, needsRefresh } from '../auth/session';
 import type { TokenFetch } from '../auth/tokens';
 import { refreshGrant } from '../auth/tokens';
 import type { DemoReason, EnvReading, SpotifyEnv } from '../env';
+import type { SessionCaches } from './session-cache';
 
 /** Why the fake is in play. The crown says which, because "demo mode" alone is not a reason. */
 export type DemoCause = 'notConfigured' | 'noSession';
@@ -46,6 +53,16 @@ export type ChooseClientInput = {
   readonly writeSession?: SessionWriter | undefined;
   readonly fetchImpl?: TokenFetch | undefined;
   readonly now?: (() => number) | undefined;
+  /**
+   * Where reads are kept between server actions. Left out, every client starts cold, which
+   * is what every caller but `./server` wants.
+   */
+  readonly caches?: SessionCaches | undefined;
+  /**
+   * The transport the live client talks over. The app never sets it; a test does, to run the
+   * live path — paging, schemas, caches and all — with no network under it.
+   */
+  readonly transport?: { readonly fetch: FetchLike; readonly baseUrl: string } | undefined;
 };
 
 function demoHandle(cause: DemoCause, reasons: readonly DemoReason[]): SpotifyHandle {
@@ -97,16 +114,27 @@ export function chooseClient(input: ChooseClientInput): SpotifyHandle {
   if (input.reading.kind === 'demo') return demoHandle('notConfigured', input.reading.reasons);
   if (input.session === null) return demoHandle('noSession', []);
 
+  // The one place a store is chosen, and it is chosen by the session id alone.
+  const caches = input.caches?.forSession(input.session.sid);
+
+  const live = new LiveSpotifyClient({
+    getToken: createTokenProvider({
+      env: input.reading.env,
+      session: input.session,
+      writeSession: input.writeSession,
+      fetchImpl: input.fetchImpl,
+      now: input.now ?? Date.now,
+    }),
+    // The catalog reads cache themselves; handing the store in is what makes them outlast
+    // the request. The `/me` reads are not keyed by an id, so they need the wrapper below.
+    ...(caches === undefined ? {} : { cacheFactory: caches }),
+    ...(input.transport === undefined
+      ? {}
+      : { fetch: input.transport.fetch, baseUrl: input.transport.baseUrl }),
+  });
+
   return {
     mode: 'live',
-    client: new LiveSpotifyClient({
-      getToken: createTokenProvider({
-        env: input.reading.env,
-        session: input.session,
-        writeSession: input.writeSession,
-        fetchImpl: input.fetchImpl,
-        now: input.now ?? Date.now,
-      }),
-    }),
+    client: caches === undefined ? live : new CachedSpotifyClient({ client: live, caches }),
   };
 }
