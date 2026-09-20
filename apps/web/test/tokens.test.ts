@@ -2,11 +2,20 @@
 // Reads tokens.css off disk, so it wants a real file URL. jsdom does not give one, and
 // Vite's CSS plugin swallows `?raw` for stylesheets.
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { contrast as ratioBetween, outOfGamut, parseOklch as toOklch, tokenBlock } from './oklch';
+import type { Oklch } from './oklch';
 
 const css = readFileSync(
   fileURLToPath(new URL('../src/styles/tokens.css', import.meta.url)),
+  'utf8',
+);
+
+const globals = readFileSync(
+  fileURLToPath(new URL('../src/styles/globals.css', import.meta.url)),
   'utf8',
 );
 
@@ -119,6 +128,36 @@ function themeValues(token: string): ThemePair {
   return { light: resolve(pair[1]), dark: resolve(pair[2]) };
 }
 
+/** The ported helper's parse, narrowed: every color this file measures must parse. */
+function oklchToken(token: string, theme: 'light' | 'dark'): Oklch {
+  const value = themeValues(token)[theme];
+  const parsed = toOklch(value);
+  if (parsed === null) throw new Error(`${token} in ${theme} is not an oklch value: ${value}`);
+  return parsed;
+}
+
+/** The steps a panel family offers, in this vocabulary. §5.2's table is the same list. */
+const SURFACE_FAMILY = [
+  '--ground',
+  '--surface',
+  '--surface-raised',
+  '--surface-top',
+  '--surface-well',
+] as const;
+
+/** Tokens whose job is text on a surface. The accent and the LED are fills and dots, not ink. */
+const TEXT_TOKENS = ['--ink', '--ink-muted'] as const;
+
+const TEXT_ON_SURFACE = TEXT_TOKENS.flatMap((ink) =>
+  SURFACE_FAMILY.flatMap((surface) =>
+    (['light', 'dark'] as const).map((theme) => [ink, surface, theme] as const),
+  ),
+);
+
+const SEAM_ON_SURFACE = SURFACE_FAMILY.flatMap((surface) =>
+  (['light', 'dark'] as const).map((theme) => [surface, theme] as const),
+);
+
 describe('theme parity', () => {
   it.each(SEMANTIC_COLOR_TOKENS)('%s is declared', (token) => {
     expect(() => declarationOf(token)).not.toThrow();
@@ -193,6 +232,30 @@ describe('contrast', () => {
     const line = themeValues('--line')[theme];
     const surface = themeValues('--surface')[theme];
     expect(contrast(line, surface)).toBeLessThan(AA_LARGE);
+  });
+
+  /**
+   * Ported from character-bible's token test: the ink set is measured against the whole
+   * surface family, not only the pairs asserted above, because usage drifts and the vocabulary
+   * is the contract. Every ratio is recomputed from the token values — §5.2's rule that the
+   * palette is tuned against the assertions, never by eye.
+   */
+  it.each(TEXT_ON_SURFACE)('%s on %s clears AA body text in %s', (ink, surface, theme) => {
+    expect(ratioBetween(oklchToken(ink, theme), oklchToken(surface, theme))).toBeGreaterThanOrEqual(
+      AA_BODY,
+    );
+  });
+
+  /**
+   * The seam half of character-bible's edge test, across the whole family. The other half — a
+   * control edge clearing the 3:1 floor — has no token to bind here: this palette has no
+   * `--line-strong`, because §5 rule 2 says control boundaries are carried by fill and
+   * elevation, not a louder line. The one line token is the seam, and its job is to stay quiet.
+   */
+  it.each(SEAM_ON_SURFACE)('the seam stays quiet against %s in %s', (surface, theme) => {
+    expect(ratioBetween(oklchToken('--line', theme), oklchToken(surface, theme))).toBeLessThan(
+      AA_LARGE,
+    );
   });
 
   it.each(['light', 'dark'] as const)(
@@ -406,4 +469,152 @@ describe('the source-tone table in ui-sensibility follows tokens.css', () => {
       expect(Number(components(light).split(' ')[2])).toBe(hue);
     },
   );
+});
+
+/**
+ * The contract tests ported from `character-bible/test/tokens.test.js`, which the assertions
+ * above only partly enforced. The port's one rule governs all of it: ratios are recomputed from
+ * the token values, never asserted against a number somebody typed.
+ *
+ * What did not come across, and why:
+ * - shadcn's vocabulary — this app has no shadcn; there is no `components.json` anywhere.
+ * - the `data-slot` frame seam — nothing in `apps/web/src` is addressed by `data-slot`.
+ * - a control edge's 3:1 floor — no `--line-strong` here; §5 rule 2 gives that job to fill and
+ *   elevation. Noted beside the seam test above.
+ * - the 45° tone separation over danger/warn/ok — this palette's contract differs on purpose:
+ *   danger shares the act-red family (§5.1 rule 4), and separation from the accent is the LED's
+ *   and the source tones' job, asserted in `source tones` above.
+ * The source's theme-block parity tests are this file's `theme parity` describe — one
+ * `light-dark()` per token makes a half-declared theme structurally impossible. Its
+ * accent-ink test is `the accent carries its ink` above.
+ *
+ * The hue-free ground and the reduced-motion duration tests did come across, adapted to this
+ * vocabulary — they are below.
+ */
+describe('gamut', () => {
+  // Ported: an oklch value outside sRGB is silently clamped into a colour nobody chose. Every
+  // colour a token resolves to is one of the literals in tokens.css, so the literals are the
+  // complete set to measure.
+  const literals = [...new Set([...css.matchAll(/oklch\([^)]+\)/g)].map((m) => m[0] ?? ''))];
+
+  it('finds the literals at all, so the scan cannot pass vacuously', () => {
+    expect(literals.length).toBeGreaterThan(0);
+  });
+
+  it.each(literals)('%s sits inside sRGB', (literal) => {
+    const parsed = toOklch(literal);
+    if (parsed === null) throw new Error(`not an oklch literal: ${literal}`);
+    expect(outOfGamut(parsed)).toBe(false);
+  });
+});
+
+describe('the neutral grounds are hue-free', () => {
+  // Ported from character-bible's plate test. The ground behind a thing the person is judging
+  // must carry no chroma, because a tinted ground tints the thing itself (§4.3). Here that
+  // ground is `--surface-neutral` (behind album art and cover previews) and `--cover-ground`
+  // (the printed cover's own plate).
+  const NEUTRAL_GROUNDS = ['--surface-neutral', '--cover-ground'] as const;
+
+  it.each(
+    NEUTRAL_GROUNDS.flatMap((token) =>
+      (['light', 'dark'] as const).map((theme) => [token, theme] as const),
+    ),
+  )('%s carries no chroma in %s', (token, theme) => {
+    expect(oklchToken(token, theme).c).toBe(0);
+  });
+});
+
+describe('the token layer is the only place a raw value is named', () => {
+  // Ported. §4.1: nothing outside tokens.css holds a raw colour. Comments are stripped before
+  // the patrol runs — palette.ts's header says it names `oklch(...)` nowhere, and the rule
+  // must not flag the rule.
+  const RAW = /#[0-9a-fA-F]{3,8}\b|oklch\(|rgba?\(|hsla?\(/;
+  const srcDir = fileURLToPath(new URL('../src', import.meta.url));
+  const tokensPath = fileURLToPath(new URL('../src/styles/tokens.css', import.meta.url));
+
+  const stripComments = (source: string): string =>
+    source
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n')
+      .map((line) => line.replace(/^\s*\/\/.*$/, ''))
+      .join('\n');
+
+  const walk = (dir: string): readonly string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) return walk(full);
+      return /\.(ts|tsx|css)$/.test(entry.name) ? [full] : [];
+    });
+
+  it('names no raw colour outside tokens.css', () => {
+    const offenders: string[] = [];
+    for (const file of walk(srcDir)) {
+      if (file === tokensPath) continue;
+      stripComments(readFileSync(file, 'utf8'))
+        .split('\n')
+        .forEach((line, i) => {
+          if (RAW.test(line))
+            offenders.push(`${file.slice(srcDir.length + 1)}:${i + 1}: ${line.trim()}`);
+        });
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('the focus indicator is declared once, from the accent, with an offset', () => {
+  // Ported. globals.css states this in prose; here it is as an assertion. An indicator set per
+  // component is an indicator removed with no replacement on every component nobody
+  // remembered (§13).
+  const sheet = globals.replace(/\/\*[\s\S]*?\*\//g, '');
+  const declarations = sheet.match(/^[ \t]*outline:[ \t]*[^;]+;/gm) ?? [];
+  const visible = declarations.filter((d) => !/outline:[ \t]*none/.test(d));
+
+  it('sets exactly one visible outline', () => {
+    expect(visible).toHaveLength(1);
+  });
+
+  it('draws it from the accent family', () => {
+    expect(visible[0] ?? '').toContain('var(--accent');
+  });
+
+  it('offsets it from the edge it marks', () => {
+    expect(sheet).toMatch(/outline-offset:[ \t]*var\(--focus-offset\);/);
+  });
+
+  it('removes the ring only where the visible one takes over', () => {
+    const selectors = [...sheet.matchAll(/outline:[ \t]*none;/g)].map((m) => {
+      const open = m.index === undefined ? -1 : sheet.lastIndexOf('{', m.index);
+      const close = sheet.lastIndexOf('}', open);
+      return sheet.slice(close + 1, open).trim();
+    });
+    expect(selectors.every((s) => s.includes(':not(:focus-visible)'))).toBe(true);
+  });
+});
+
+describe('reduced motion is honored where the durations are declared', () => {
+  // Ported from character-bible's `--dur-*` test, on this vocabulary: `--duration-*` plus
+  // `--motion-scale`. The branch lives in tokens.css beside the tokens it scales, so no caller
+  // has to remember it (§8). Durations shorten rather than collapse — a 1ms cross-fade is the
+  // strip §8 forbids — and travel goes to zero through `--motion-scale`.
+  const durations = [...tokenBlock(css, ':root {').keys()].filter((name) =>
+    name.startsWith('--duration-'),
+  );
+  const reducedAt = css.indexOf('@media (prefers-reduced-motion: reduce)');
+  const reduced = reducedAt === -1 ? '' : css.slice(reducedAt);
+
+  it('declares duration tokens at all', () => {
+    expect(durations.length).toBeGreaterThan(0);
+  });
+
+  it('keeps the reduced-motion branch in the same file as the durations', () => {
+    expect(reducedAt).toBeGreaterThan(-1);
+  });
+
+  it.each(durations)('%s is rescaled under reduced motion', (name) => {
+    expect(reduced.includes(`${name}:`)).toBe(true);
+  });
+
+  it('zeroes travel under reduced motion', () => {
+    expect(/--motion-scale:[ \t]*0;/.test(reduced)).toBe(true);
+  });
 });
