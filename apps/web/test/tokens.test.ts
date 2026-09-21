@@ -495,6 +495,14 @@ describe('gamut', () => {
   // Ported: an oklch value outside sRGB is silently clamped into a colour nobody chose. Every
   // colour a token resolves to is one of the literals in tokens.css, so the literals are the
   // complete set to measure.
+  //
+  // The conversion is anchor-verified — sRGB white, red and blue round-trip through Ottosson's
+  // matrices to four decimals — so a failure here means the token value sits outside the linear
+  // cube, not that the math drifted. Measured Sept 2026: the LED light tone and the four
+  // light-theme source tones overshoot one channel by 0.014–0.030 against a 1e-4 slack. The
+  // cure is a smaller chroma in tokens.css; widening the slack to absorb that would also absorb
+  // the clip this test exists to catch — the rendered followed-light hue lands 7.6° off the
+  // chosen one.
   const literals = [...new Set([...css.matchAll(/oklch\([^)]+\)/g)].map((m) => m[0] ?? ''))];
 
   it('finds the literals at all, so the scan cannot pass vacuously', () => {
