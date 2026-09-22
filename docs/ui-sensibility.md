@@ -359,11 +359,11 @@ it is reserved for indicators, which are never text.
 | `--surface-top`    | `oklch(97.6% .002 85)`  | `oklch(31% .01 256)`    | The highest step. Knob caps, key faces.    |
 | `--surface-well`   | `oklch(79.5% .005 86)`  | `oklch(16.8% .004 264)` | Machined into the panel. Slots, wells.     |
 | `--ink`            | `oklch(21.8% .004 264)` | `oklch(91.1% .005 248)` | Text.                                      |
-| `--ink-muted`      | `oklch(45% .006 85)`    | `oklch(60.1% .013 252)` | Secondary text. Never on a colour fill.    |
+| `--ink-muted`      | `oklch(41.5% .006 85)`  | `oklch(68% .013 252)`   | Secondary text. Never on a colour fill.    |
 | `--line`           | `oklch(70% .008 85)`    | `oklch(33% .008 258)`   | **A seam, not a border.** Stays under 3:1. |
 | `--accent`         | `oklch(50% .19 27)`     | `oklch(54% .185 25)`    | **Act.** Carries white.                    |
 | `--accent-bright`  | `oklch(58% .2 27)`      | `oklch(66% .2 25)`      | Indicators. Never text.                    |
-| `--led`            | `oklch(62% .15 68)`     | `oklch(75.8% .14 73)`   | Amber. Reports, never acts.                |
+| `--led`            | `oklch(62% .13 68)`     | `oklch(75.8% .14 73)`   | Amber. Reports, never acts.                |
 | `--danger`         | `oklch(48% .17 29)`     | `oklch(54% .18 29)`     | Destructive. Never primary.                |
 
 **Source tones** (§5.1) — an even ramp 110°→313°, ~29° apart, dodging the red accent by ≥45°
@@ -371,11 +371,11 @@ and the amber LED by ≥35°.
 
 | Source kind       | Hue | Light                | Dark                 |
 | ----------------- | --- | -------------------- | -------------------- |
-| `track`           | 110 | `oklch(48% .13 110)` | `oklch(74% .13 110)` |
+| `track`           | 110 | `oklch(48% .10 110)` | `oklch(74% .13 110)` |
 | `newReleases`     | 139 | `oklch(48% .13 139)` | `oklch(74% .13 139)` |
-| `search`          | 168 | `oklch(48% .11 168)` | `oklch(74% .11 168)` |
-| `library`         | 197 | `oklch(48% .10 197)` | `oklch(74% .10 197)` |
-| `followedArtists` | 226 | `oklch(48% .12 226)` | `oklch(72% .11 226)` |
+| `search`          | 168 | `oklch(48% .09 168)` | `oklch(74% .11 168)` |
+| `library`         | 197 | `oklch(48% .08 197)` | `oklch(74% .10 197)` |
+| `followedArtists` | 226 | `oklch(48% .09 226)` | `oklch(72% .11 226)` |
 | `artist`          | 255 | `oklch(46% .15 255)` | `oklch(70% .13 255)` |
 | `playlist`        | 284 | `oklch(46% .16 284)` | `oklch(72% .14 284)` |
 | `topTracks`       | 313 | `oklch(46% .17 313)` | `oklch(72% .15 313)` |
