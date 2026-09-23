@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Exclusion } from '../src/index';
+import type { Exclusion, SetCoverage } from '../src/index';
 import {
   LIVE_OR_REMIX_PATTERNS,
   isExcluded,
@@ -8,7 +8,7 @@ import {
   playlistId,
   reject,
 } from '../src/index';
-import { artistAt, makeContext, makePool, makeTrack } from './fixtures/index';
+import { artistAt, makeContext, makePool, makeSingleArtistPool, makeTrack } from './fixtures/index';
 
 const context = makeContext();
 const pool = makePool();
@@ -295,5 +295,58 @@ describe('reject report', () => {
   it('handles an empty pool', () => {
     const { report } = reject({ pool: [], exclusions: [{ kind: 'explicit' }], context });
     expect(report.keptCount).toBe(0);
+  });
+});
+
+describe('a block over a list nobody read to the end', () => {
+  const KIDS = playlistId('pl-kids');
+  const READ = 400;
+  const blocked = makeSingleArtistPool(900);
+  const exclusions: Exclusion[] = [{ kind: 'playlist', playlistId: KIDS }];
+  const clipped = makeContext({
+    playlistTrackIds: { 'pl-kids': blocked.slice(0, READ).map((track) => track.id) },
+    coverage: {
+      playlistTrackIds: new Map<ReturnType<typeof playlistId>, SetCoverage>([
+        [KIDS, { kind: 'clipped', read: READ, total: blocked.length }],
+      ]),
+    },
+  });
+
+  it('lets every track past the ceiling through', () => {
+    const { kept } = reject({ pool: blocked, exclusions, context: clipped });
+    expect(kept).toHaveLength(500);
+  });
+
+  it('counts only what it could see', () => {
+    const { report } = reject({ pool: blocked, exclusions, context: clipped });
+    expect(report.removals[0]?.removed).toBe(400);
+  });
+
+  it('says on the removal that the list stopped short', () => {
+    const { report } = reject({ pool: blocked, exclusions, context: clipped });
+    expect(report.removals[0]?.coverage).toEqual({ kind: 'clipped', read: 400, total: 900 });
+  });
+
+  it('calls a list absent from the context unread rather than empty', () => {
+    const { report } = reject({ pool: blocked, exclusions, context: makeContext() });
+    expect(report.removals[0]?.coverage).toEqual({ kind: 'unread' });
+  });
+
+  it('claims no coverage for an exclusion that reads the track alone', () => {
+    const { report } = reject({ pool: blocked, exclusions: [{ kind: 'explicit' }], context });
+    expect(report.removals[0]?.coverage).toBeNull();
+  });
+
+  it('passes the library coverage to an inLibrary exclusion', () => {
+    const half = makeContext({
+      libraryTrackIds: blocked.slice(0, 200).map((track) => track.id),
+      coverage: { libraryTrackIds: { kind: 'clipped', read: 200, total: 3000 } },
+    });
+    const { report } = reject({
+      pool: blocked,
+      exclusions: [{ kind: 'inLibrary' }],
+      context: half,
+    });
+    expect(report.removals[0]?.coverage).toEqual({ kind: 'clipped', read: 200, total: 3000 });
   });
 });

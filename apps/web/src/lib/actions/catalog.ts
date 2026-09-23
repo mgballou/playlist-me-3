@@ -15,8 +15,8 @@
  * artist the resolver could not then reach.
  */
 
-import type { ArtistId, PlaylistId } from '@pm/core';
-import { playlistId } from '@pm/core';
+import type { ArtistId, PlaylistId, SetCoverage } from '@pm/core';
+import { playlistId, unreachable } from '@pm/core';
 import { SEARCH_MAX_LIMIT, SpotifyError, demoCatalog } from '@pm/spotify';
 
 import { getSpotifyHandle } from '../spotify/server';
@@ -115,6 +115,27 @@ export async function listMyPlaylists(): Promise<CatalogLookup<PlaylistChoice>> 
 }
 
 /**
+ * How long the list is, not how much of it we read.
+ *
+ * The picker's own rows carry `tracks.total` and a pasted link used to carry the length of
+ * the read — four hundred for the same nine-hundred track list. That was the one place the
+ * ceiling was visible on screen, and it was the wrong number rather than a warning.
+ */
+function playlistLength(coverage: SetCoverage): number {
+  switch (coverage.kind) {
+    case 'clipped':
+      return coverage.total;
+    case 'whole':
+    case 'unmeasured':
+      return coverage.read;
+    case 'unread':
+      return 0;
+    default:
+      return unreachable(coverage);
+  }
+}
+
+/**
  * A link, a URI or a bare id, confirmed by reading the thing. The read costs a request and
  * it is the same one the source or the exclusion would have spent anyway (§3.1).
  */
@@ -126,11 +147,11 @@ export async function lookupPlaylist(reference: string): Promise<CatalogLookup<P
 
   try {
     const handle = await getSpotifyHandle();
-    const tracks = await handle.client.getPlaylistTracks(id, { maxItems: 400 });
+    const read = await handle.client.getPlaylistTracks(id, { maxItems: 400 });
     const known = demoCatalog.playlists.find((list) => list.id === id);
     return {
       ok: true,
-      items: [{ id, name: known?.name ?? id, trackCount: tracks.length }],
+      items: [{ id, name: known?.name ?? id, trackCount: playlistLength(read.coverage) }],
     };
   } catch (cause) {
     return failed(cause);

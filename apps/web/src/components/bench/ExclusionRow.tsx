@@ -9,11 +9,19 @@
  *
  * `liveOrRemix` carries its "best effort" caveat from the registry, always visible (§12.1).
  * A heuristic presented as certainty is the easiest lie in the project to tell.
+ *
+ * **A block that stopped short says so on the row**, beside the count. The count on its own
+ * cannot be read — four hundred removed off a nine hundred track list is the block stopping,
+ * not the block working, and the two are the same number.
  */
 
-import type { Exclusion } from '@pm/core';
+import type { Exclusion, SetCoverage } from '@pm/core';
 
-import { describeExclusion, exclusionDefinition } from '@/lib/registry/exclusions';
+import {
+  describeCoverage,
+  describeExclusion,
+  exclusionDefinition,
+} from '@/lib/registry/exclusions';
 
 export type ExclusionRowProps = {
   readonly exclusion: Exclusion;
@@ -21,12 +29,23 @@ export type ExclusionRowProps = {
   readonly names: ReadonlyMap<string, string>;
   /** Null before a build has run. Not zero — those are different things. §12 */
   readonly removed: number | null;
+  /** How much of the set behind this exclusion was read. Null before a build, and for the
+   * exclusions that read the track itself and can never be short. */
+  readonly coverage: SetCoverage | null;
   readonly onRemove: () => void;
 };
 
-export function ExclusionRow({ exclusion, index, names, removed, onRemove }: ExclusionRowProps) {
+export function ExclusionRow({
+  exclusion,
+  index,
+  names,
+  removed,
+  coverage,
+  onRemove,
+}: ExclusionRowProps) {
   const definition = exclusionDefinition(exclusion.kind);
   const subject = describeExclusion(exclusion, names);
+  const shortfall = coverage === null ? null : describeCoverage(coverage);
 
   return (
     <li
@@ -65,6 +84,12 @@ export function ExclusionRow({ exclusion, index, names, removed, onRemove }: Exc
           <span aria-hidden="true">✕</span>
         </button>
       </div>
+
+      {shortfall === null ? null : (
+        <p className="row__clipped" data-clipped="true">
+          {shortfall}
+        </p>
+      )}
 
       {definition.caveat === null ? null : (
         <p className="row__caveat" data-estimate="true">

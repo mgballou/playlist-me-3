@@ -1,10 +1,11 @@
+import { playlistId } from '@pm/core';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { Dial } from '@/components/bench/Dial';
 import { ExclusionRow } from '@/components/bench/ExclusionRow';
 import { DIAL_DEFINITIONS, dialValueText, dialWords } from '@/lib/registry/dials';
-import { EXCLUSION_DEFINITIONS } from '@/lib/registry/exclusions';
+import { EXCLUSION_DEFINITIONS, describeCoverage } from '@/lib/registry/exclusions';
 
 const noNames = new Map<string, string>();
 
@@ -86,6 +87,7 @@ describe('the live-or-remix filter says best effort', () => {
         index={0}
         names={noNames}
         removed={12}
+        coverage={null}
         onRemove={() => undefined}
       />,
     );
@@ -141,6 +143,7 @@ describe('a row without a build renders no judgment', () => {
         index={0}
         names={noNames}
         removed={null}
+        coverage={null}
         onRemove={() => undefined}
       />,
     );
@@ -154,6 +157,7 @@ describe('a row without a build renders no judgment', () => {
         index={0}
         names={noNames}
         removed={null}
+        coverage={null}
         onRemove={() => undefined}
       />,
     );
@@ -167,6 +171,7 @@ describe('a row without a build renders no judgment', () => {
         index={0}
         names={noNames}
         removed={0}
+        coverage={null}
         onRemove={() => undefined}
       />,
     );
@@ -180,6 +185,7 @@ describe('a row without a build renders no judgment', () => {
         index={0}
         names={noNames}
         removed={214}
+        coverage={null}
         onRemove={() => undefined}
       />,
     );
@@ -195,9 +201,72 @@ describe('a glyph-only control keeps its name', () => {
         index={0}
         names={noNames}
         removed={3}
+        coverage={null}
         onRemove={() => undefined}
       />,
     );
     expect(screen.getByRole('button', { name: /Stop blocking/ })).toBeInTheDocument();
+  });
+});
+
+describe('a block says when it stopped short of the list it read', () => {
+  it('says nothing when it read the whole list', () => {
+    expect(describeCoverage({ kind: 'whole', read: 214 })).toBeNull();
+  });
+
+  it('names what it read and what there was', () => {
+    expect(describeCoverage({ kind: 'clipped', read: 400, total: 900 })).toBe(
+      'Read 400 of 900 tracks. Anything past that is not blocked.',
+    );
+  });
+
+  it('admits it cannot say how much it missed when nothing told it', () => {
+    expect(describeCoverage({ kind: 'unmeasured', read: 50 })).toMatch(/how long the list is/);
+  });
+
+  it('tells a failed read apart from an empty one', () => {
+    expect(describeCoverage({ kind: 'unread' })).toMatch(/could not be read/);
+  });
+
+  it('renders the shortfall on the row that claims the block', () => {
+    render(
+      <ExclusionRow
+        exclusion={{ kind: 'playlist', playlistId: playlistId('pl-kids') }}
+        index={0}
+        names={new Map([['pl-kids', 'Kids Jams']])}
+        removed={400}
+        coverage={{ kind: 'clipped', read: 400, total: 900 }}
+        onRemove={() => undefined}
+      />,
+    );
+    expect(screen.getByText(/Read 400 of 900 tracks/)).toBeInTheDocument();
+  });
+
+  it('keeps the count beside it, so the two are read together', () => {
+    render(
+      <ExclusionRow
+        exclusion={{ kind: 'playlist', playlistId: playlistId('pl-kids') }}
+        index={0}
+        names={new Map([['pl-kids', 'Kids Jams']])}
+        removed={400}
+        coverage={{ kind: 'clipped', read: 400, total: 900 }}
+        onRemove={() => undefined}
+      />,
+    );
+    expect(screen.getByText('−400')).toBeInTheDocument();
+  });
+
+  it('says nothing on a row whose set was read whole', () => {
+    render(
+      <ExclusionRow
+        exclusion={{ kind: 'inLibrary' }}
+        index={0}
+        names={noNames}
+        removed={12}
+        coverage={{ kind: 'whole', read: 180 }}
+        onRemove={() => undefined}
+      />,
+    );
+    expect(screen.queryByText(/not blocked/)).toBeNull();
   });
 });

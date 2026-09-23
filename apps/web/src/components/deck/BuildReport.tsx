@@ -14,7 +14,7 @@
 import type { BuildReport as Report } from '@pm/core';
 import { format } from '@pm/core';
 
-import { exclusionDefinition } from '@/lib/registry/exclusions';
+import { describeCoverage, exclusionDefinition } from '@/lib/registry/exclusions';
 import { sourceDefinition } from '@/lib/registry/sources';
 import { toneStyle } from '@/lib/registry/tone';
 
@@ -28,6 +28,15 @@ export function BuildReport({ report }: BuildReportProps) {
   const widest = Math.max(1, ...contributions.map((entry) => entry.pooled));
   const removals = report.reject.removals;
   const heaviest = Math.max(1, ...removals.map((entry) => entry.removed));
+  // A bar is a picture of what a block removed, and a block that stopped short drew a
+  // shorter bar for the wrong reason. The bars keep their shape and the shortfall is said
+  // in words underneath, because a number that means two things is worse than no number.
+  const shortfalls = removals.flatMap((removal) => {
+    const said = removal.coverage === null ? null : describeCoverage(removal.coverage);
+    return said === null
+      ? []
+      : [{ index: removal.exclusionIndex, label: exclusionDefinition(removal.kind).label, said }];
+  });
 
   return (
     <div className="report">
@@ -82,6 +91,12 @@ export function BuildReport({ report }: BuildReportProps) {
               </li>
             ))}
           </ul>
+
+          {shortfalls.map((entry) => (
+            <p key={entry.index} className="report__foot">
+              {entry.label}: {entry.said}
+            </p>
+          ))}
         </section>
       )}
 

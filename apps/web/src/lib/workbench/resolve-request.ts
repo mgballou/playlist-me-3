@@ -21,7 +21,15 @@
  * Tokens never appear in any of these types. Only resolved pool data crosses to the browser.
  */
 
-import type { ArtistId, EngineContext, PlaylistId, Recipe, Source, TrackId } from '@pm/core';
+import type {
+  ArtistId,
+  EngineContext,
+  PlaylistId,
+  Recipe,
+  SetCoverage,
+  Source,
+  TrackId,
+} from '@pm/core';
 
 export type ResolveRequest = {
   readonly sources: readonly Source[];
@@ -49,6 +57,11 @@ export function resolveKey(request: ResolveRequest): string {
  * `EngineContext` holds `Set`s and `Map`s. This is the same information as arrays, so that
  * what crosses the server-action boundary is plainly serializable rather than relying on how
  * a framework happens to encode a `Map` this year.
+ *
+ * **Every set here is read under a ceiling, and every one carries how much it holds.** A set
+ * without that is a set the engine cannot reason about: `reject` permits any id it has not
+ * heard of, so a library read to two hundred and a library of two hundred produce the same
+ * deck and the same report, and only one of them honored the recipe.
  */
 export type ContextPayload = {
   readonly libraryTrackIds: readonly TrackId[];
@@ -58,8 +71,18 @@ export type ContextPayload = {
   readonly playlists: readonly {
     readonly playlistId: PlaylistId;
     readonly trackIds: readonly TrackId[];
+    readonly coverage: SetCoverage;
   }[];
+  /** How much of each of the four sets above the read came back with. */
+  readonly coverage: {
+    readonly libraryTrackIds: SetCoverage;
+    readonly topTrackIds: SetCoverage;
+    readonly recentlyHeardTrackIds: SetCoverage;
+    readonly followedArtistIds: SetCoverage;
+  };
 };
+
+const NOTHING_ASKED_FOR: SetCoverage = { kind: 'whole', read: 0 };
 
 export const EMPTY_CONTEXT_PAYLOAD: ContextPayload = {
   libraryTrackIds: [],
@@ -67,6 +90,12 @@ export const EMPTY_CONTEXT_PAYLOAD: ContextPayload = {
   recentlyHeardTrackIds: [],
   followedArtistIds: [],
   playlists: [],
+  coverage: {
+    libraryTrackIds: NOTHING_ASKED_FOR,
+    topTrackIds: NOTHING_ASKED_FOR,
+    recentlyHeardTrackIds: NOTHING_ASKED_FOR,
+    followedArtistIds: NOTHING_ASKED_FOR,
+  },
 };
 
 export function toEngineContext(payload: ContextPayload): EngineContext {
@@ -78,5 +107,11 @@ export function toEngineContext(payload: ContextPayload): EngineContext {
     playlistTrackIds: new Map(
       payload.playlists.map((entry) => [entry.playlistId, new Set(entry.trackIds)]),
     ),
+    coverage: {
+      ...payload.coverage,
+      playlistTrackIds: new Map(
+        payload.playlists.map((entry) => [entry.playlistId, entry.coverage]),
+      ),
+    },
   };
 }

@@ -20,6 +20,7 @@ import type {
   ArtistId,
   CatalogDepth,
   PlaylistId,
+  SetCoverage,
   TopRange,
   TrackId,
   YearRange,
@@ -33,6 +34,7 @@ import type {
   CoverUploadInput,
   CreatePlaylistInput,
   ListOptions,
+  ListSlice,
   PlaylistSummary,
   RequestCounter,
   RequestOptions,
@@ -104,6 +106,14 @@ function inYears(year: number, years: YearRange | undefined): boolean {
 /** One request costs one page, the same way the live client would spend it. §5.2 */
 function pageCount(items: number): number {
   return Math.max(1, Math.ceil(items / PAGE_MAX_LIMIT));
+}
+
+/**
+ * The catalog knows how long every list is, which is what Spotify's own `total` gives the
+ * live client. A read that stopped short says so with the number it stopped short of.
+ */
+function counted(read: number, held: number): SetCoverage {
+  return read < held ? { kind: 'clipped', read, total: held } : { kind: 'whole', read };
 }
 
 export class FakeSpotifyClient implements SpotifyClient {
@@ -378,47 +388,52 @@ export class FakeSpotifyClient implements SpotifyClient {
   // The person
   // -------------------------------------------------------------------------
 
-  async getSavedTracks(options?: ListOptions): Promise<readonly CatalogTrack[]> {
+  async getSavedTracks(options?: ListOptions): Promise<ListSlice<CatalogTrack>> {
     this.guard(options, 'getSavedTracks');
-    const ids = this.catalog.savedTrackIds.slice(0, options?.maxItems ?? Number.MAX_SAFE_INTEGER);
+    const held = this.catalog.savedTrackIds;
+    const ids = held.slice(0, options?.maxItems ?? Number.MAX_SAFE_INTEGER);
     this.record({ method: 'getSavedTracks' }, pageCount(ids.length));
-    return this.tracksOf(ids);
+    return { items: this.tracksOf(ids), coverage: counted(ids.length, held.length) };
   }
 
-  async getTopTracks(range: TopRange, options?: ListOptions): Promise<readonly CatalogTrack[]> {
+  async getTopTracks(range: TopRange, options?: ListOptions): Promise<ListSlice<CatalogTrack>> {
     this.guard(options, 'getTopTracks');
-    const ids = this.catalog.topTrackIds[range].slice(
-      0,
-      options?.maxItems ?? Number.MAX_SAFE_INTEGER,
-    );
+    const held = this.catalog.topTrackIds[range];
+    const ids = held.slice(0, options?.maxItems ?? Number.MAX_SAFE_INTEGER);
     this.record({ method: 'getTopTracks', range }, pageCount(ids.length));
-    return this.tracksOf(ids);
+    return { items: this.tracksOf(ids), coverage: counted(ids.length, held.length) };
   }
 
-  async getRecentlyPlayed(options?: ListOptions): Promise<readonly CatalogTrack[]> {
+  /** Spotify sends no usable total with recently played, so neither does this. */
+  async getRecentlyPlayed(options?: ListOptions): Promise<ListSlice<CatalogTrack>> {
     this.guard(options, 'getRecentlyPlayed');
-    const ids = this.catalog.recentlyPlayedTrackIds.slice(
-      0,
-      options?.maxItems ?? Number.MAX_SAFE_INTEGER,
-    );
+    const held = this.catalog.recentlyPlayedTrackIds;
+    const ids = held.slice(0, options?.maxItems ?? Number.MAX_SAFE_INTEGER);
     this.record({ method: 'getRecentlyPlayed' });
-    return this.tracksOf(ids);
+    return {
+      items: this.tracksOf(ids),
+      coverage:
+        ids.length < held.length
+          ? { kind: 'unmeasured', read: ids.length }
+          : { kind: 'whole', read: ids.length },
+    };
   }
 
-  async getFollowedArtists(options?: ListOptions): Promise<readonly Artist[]> {
+  async getFollowedArtists(options?: ListOptions): Promise<ListSlice<Artist>> {
     this.guard(options, 'getFollowedArtists');
-    const ids = this.catalog.followedArtistIds.slice(
-      0,
-      options?.maxItems ?? Number.MAX_SAFE_INTEGER,
-    );
+    const held = this.catalog.followedArtistIds;
+    const ids = held.slice(0, options?.maxItems ?? Number.MAX_SAFE_INTEGER);
     this.record({ method: 'getFollowedArtists' }, pageCount(ids.length));
-    return ids.flatMap((id) => {
-      const artist = this.artistsById.get(id);
-      return artist === undefined ? [] : [this.artistOf(artist)];
-    });
+    return {
+      items: ids.flatMap((id) => {
+        const artist = this.artistsById.get(id);
+        return artist === undefined ? [] : [this.artistOf(artist)];
+      }),
+      coverage: counted(ids.length, held.length),
+    };
   }
 
-  async getPlaylistTracks(id: PlaylistId, options?: ListOptions): Promise<readonly CatalogTrack[]> {
+  async getPlaylistTracks(id: PlaylistId, options?: ListOptions): Promise<ListSlice<CatalogTrack>> {
     this.guard(options, 'getPlaylistTracks');
     const ids = this.playlistTracks.get(id);
     if (ids === undefined) {
@@ -427,7 +442,7 @@ export class FakeSpotifyClient implements SpotifyClient {
     }
     const window = ids.slice(0, options?.maxItems ?? ids.length);
     this.record({ method: 'getPlaylistTracks', playlistId: id }, pageCount(window.length));
-    return this.tracksOf(window);
+    return { items: this.tracksOf(window), coverage: counted(window.length, ids.length) };
   }
 
   /**
