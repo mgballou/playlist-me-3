@@ -12,6 +12,7 @@ import type { ArtistId } from '@pm/core';
 
 import { findArtists } from '@/lib/actions/catalog';
 import { useLookup } from '@/lib/workbench/use-lookup';
+import { DemoNotice } from '@/components/bench/DemoNotice';
 import { Overlay } from '@/components/primitives/Overlay';
 
 export type ArtistPickerProps = {
@@ -25,6 +26,8 @@ export function ArtistPicker({ title, onPick, onClose }: ArtistPickerProps) {
 
   return (
     <Overlay title={title} onClose={onClose}>
+      <DemoNotice notice={lookup.demoNotice} />
+
       <label className="field">
         <span className="field__label label">Search for an act</span>
         <input
