@@ -8,10 +8,11 @@
  * a browser and in Node, and a link is a few hundred bytes either way.
  *
  * The same string carries the **deck** as well as the recipe when there is one: the seed,
- * the locks, and a stamp of the pool it was built against. A recipe plus a seed is a
- * complete description of a playlist (§3.1), so a link that carried only the recipe was
- * a link to a different playlist every time it was opened. The three extra keys are
- * optional, so a recipe-only string still decodes.
+ * the locks, the tracks the person banished, and a stamp of the pool it was built against.
+ * A recipe plus a seed is a complete description of a playlist (§3.1) **only over the same
+ * rejects**, because `build` takes them as an input — so a link that dropped them was a link
+ * to a different deck while reporting itself exact. The four extra keys are optional, so a
+ * recipe-only string, and any link written before one of them existed, still decodes.
  *
  * `decodeRecipe` returns a `Result` and never throws. A damaged link is an ordinary
  * thing for a person to paste, not an exceptional one.
@@ -20,6 +21,7 @@
 import type { Lock } from './domain';
 import type { Result } from './errors';
 import { DecodeError, err, ok, unreachable } from './errors';
+import type { TrackId } from './ids';
 import { artistId, playlistId, recipeId, trackId } from './ids';
 import type {
   CatalogDepth,
@@ -207,14 +209,16 @@ export function encodeRecipe(recipe: Recipe): string {
 
 /**
  * The recipe **and the deck built from it**. `d` is the seed, `l` is the locks flattened to
- * `[index, trackId, …]`, `p` is the pool stamp. Three keys, and the whole share-by-link
- * claim rests on them.
+ * `[index, trackId, …]`, `b` is the banished track ids, `p` is the pool stamp. Four keys,
+ * and the whole share-by-link claim rests on them.
  */
 export type SharedDeck = {
   readonly recipe: Recipe;
   /** Null for a string that carries a recipe alone — the shelf's, and any older link. */
   readonly seed: number | null;
   readonly locks: readonly Lock[];
+  /** Tracks banished from this recipe. Empty for a link written before they travelled. §3.3 */
+  readonly rejects: readonly TrackId[];
   /** Null when the link does not say which pool it was built against. */
   readonly poolStamp: string | null;
 };
@@ -223,12 +227,14 @@ export function encodeShare(share: {
   readonly recipe: Recipe;
   readonly seed: number;
   readonly locks: readonly Lock[];
+  readonly rejects: readonly TrackId[];
   readonly poolStamp: string;
 }): string {
   return pack({
     ...toCompact(share.recipe),
     d: share.seed,
     l: share.locks.flatMap((lock) => [lock.index, lock.trackId]),
+    b: share.rejects,
     p: share.poolStamp,
   });
 }
@@ -488,9 +494,24 @@ function decodeLocks(value: unknown): readonly Lock[] | null {
   return locks;
 }
 
+/** A banished id that will not read drops the whole link, on the same grounds as a lock. */
+function decodeRejects(value: unknown): readonly TrackId[] | null {
+  if (value === undefined) return [];
+  const raw = asArray(value);
+  if (raw === null) return null;
+  const rejects: TrackId[] = [];
+  for (const entry of raw) {
+    const id = asString(entry);
+    if (id === null) return null;
+    rejects.push(trackId(id));
+  }
+  return rejects;
+}
+
 /**
  * The recipe and, when the link carries one, the deck built from it. A link written before
- * the deck travelled decodes with `seed: null` — the caller mints one and says so.
+ * the deck travelled decodes with `seed: null` — the caller mints one and says so — and one
+ * written before the rejects travelled decodes with none, which is what it meant.
  */
 export function decodeShare(encoded: string): Result<SharedDeck, DecodeError> {
   const parsed = readRecord(encoded);
@@ -506,9 +527,12 @@ export function decodeShare(encoded: string): Result<SharedDeck, DecodeError> {
   const locks = decodeLocks(parsed.value['l']);
   if (locks === null) return err(DecodeError.malformed('locks'));
 
+  const rejects = decodeRejects(parsed.value['b']);
+  if (rejects === null) return err(DecodeError.malformed('rejects'));
+
   const rawStamp = parsed.value['p'];
   const poolStamp = rawStamp === undefined ? null : asString(rawStamp);
   if (rawStamp !== undefined && poolStamp === null) return err(DecodeError.malformed('poolStamp'));
 
-  return ok({ recipe: recipe.value, seed, locks, poolStamp });
+  return ok({ recipe: recipe.value, seed, locks, rejects, poolStamp });
 }

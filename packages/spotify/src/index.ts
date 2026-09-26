@@ -91,6 +91,9 @@ export {
   SPOTIFY_API_BASE,
 } from './live';
 
+export type { CachedSpotifyClientOptions } from './cached';
+export { CachedSpotifyClient } from './cached';
+
 export type { FakeCall, FakeSpotifyClientOptions } from './fake';
 export { FakeSpotifyClient } from './fake';
 

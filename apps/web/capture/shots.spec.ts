@@ -289,4 +289,21 @@ test.describe('phone', () => {
     await settle(page);
     await page.screenshot({ path: `${SHOTS}/phone-deck.png` });
   });
+
+  /**
+   * A sign-in that came back wrong. `stateMismatch` is the one worth photographing of the nine:
+   * it is the failure a person is likeliest to reach by accident, and it is the shape the other
+   * eight share — a sentence about what happened, and one control that is the way out.
+   *
+   * The parameter is gone from the URL by the time the shutter opens, which is the behavior
+   * rather than a race: the bench reads the reason once and takes it back out.
+   */
+  test('connection notice', async ({ page }) => {
+    await page.goto('/?auth=stateMismatch');
+    await setTheme(page, 'dark');
+
+    await expect(page.locator('.stage__notice')).toContainText('did not finish');
+    await settle(page);
+    await page.screenshot({ path: `${SHOTS}/phone-connect-failed.png` });
+  });
 });

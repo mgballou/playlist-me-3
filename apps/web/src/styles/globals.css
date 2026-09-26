@@ -259,6 +259,12 @@ h4 {
   padding: var(--space-5);
 }
 
+/* How connecting failed, across the head of the desk. It belongs to no section, so it takes
+ * the full width above the two columns rather than sitting in one of them. §7 */
+.stage__notice {
+  grid-column: 1 / -1;
+}
+
 .rack,
 .deck {
   display: flex;
@@ -1695,6 +1701,40 @@ h4 {
 }
 
 .report__foot {
+  font-size: var(--text-xs);
+}
+
+/* A read cut short. Type, not tone — this reports, it does not act, and §5 rule 4 keeps the
+   accent for the thing that does. */
+.report__notes,
+.report__reasons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.report__notes {
+  gap: var(--space-2);
+}
+
+.report__note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--surface-well);
+  box-shadow: var(--relief-well);
+}
+
+.report__note-source {
+  font-size: var(--text-xs);
+}
+
+.report__reason {
   font-size: var(--text-xs);
 }
 

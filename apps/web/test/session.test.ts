@@ -19,6 +19,7 @@ const SECRET = 'a-secret-of-at-least-thirty-two-characters';
 const NOW = 1_770_000_000_000;
 
 const session: Session = {
+  sid: 'sid-1',
   accessToken: 'access-1',
   refreshToken: 'refresh-1',
   expiresAt: NOW + 3_600_000,
@@ -44,6 +45,22 @@ describe('the sealed cookie', () => {
   it('round-trips the granted scope', async () => {
     const opened = await openSession(await sealSession(session, SECRET, NOW), SECRET);
     expect(opened?.scope).toBe(session.scope);
+  });
+
+  it('round-trips the session id', async () => {
+    const opened = await openSession(await sealSession(session, SECRET, NOW), SECRET);
+    expect(opened?.sid).toBe('sid-1');
+  });
+
+  it('opens a cookie sealed before sessions carried an id', async () => {
+    const sealed = await sealSession({ ...session, sid: null }, SECRET, NOW);
+    await expect(openSession(sealed, SECRET)).resolves.not.toBeNull();
+  });
+
+  it('reports no id for a cookie that carries none', async () => {
+    const sealed = await sealSession({ ...session, sid: null }, SECRET, NOW);
+    const opened = await openSession(sealed, SECRET);
+    expect(opened?.sid).toBeNull();
   });
 
   it('is opaque — the token does not appear in the cookie', async () => {
@@ -127,6 +144,11 @@ describe('refreshing', () => {
     expect(refreshed.refreshToken).toBe('refresh-1');
   });
 
+  it('keeps the session id across a rotation', () => {
+    const refreshed = applyRefresh({ session, grant: rotating, nowMs: NOW });
+    expect(refreshed.sid).toBe('sid-1');
+  });
+
   it('keeps the existing scope when none is sent', () => {
     const refreshed = applyRefresh({ session, grant: nonRotating, nowMs: NOW });
     expect(refreshed.scope).toBe(session.scope);
@@ -158,7 +180,7 @@ describe('the first session', () => {
       refreshToken: 'r',
       scope: 'user-top-read',
     };
-    expect(sessionFromGrant({ grant, nowMs: NOW })?.refreshToken).toBe('r');
+    expect(sessionFromGrant({ grant, nowMs: NOW, sid: 'sid-1' })?.refreshToken).toBe('r');
   });
 
   it('refuses a grant with no refresh token, rather than expiring in an hour', () => {
@@ -168,7 +190,7 @@ describe('the first session', () => {
       refreshToken: null,
       scope: null,
     };
-    expect(sessionFromGrant({ grant, nowMs: NOW })).toBeNull();
+    expect(sessionFromGrant({ grant, nowMs: NOW, sid: 'sid-1' })).toBeNull();
   });
 });
 

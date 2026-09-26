@@ -368,8 +368,14 @@ export class LiveSpotifyClient implements SpotifyClient {
     return artist;
   }
 
+  /**
+   * The ceiling is part of the key. A `track` source walks a collaborator three albums deep
+   * and an `artist` source asks for twelve, and the shorter read must not answer the longer
+   * question — which it did, quietly, until the store started outliving the request.
+   */
   async getArtistAlbums(id: ArtistId, options: ArtistAlbumsOptions): Promise<readonly Album[]> {
-    const key = `${id}:${options.depth}`;
+    const maxItems = options.maxItems ?? DEFAULT_MAX_ITEMS;
+    const key = `${id}:${options.depth}:${String(maxItems)}`;
     const cached = this.artistAlbumsCache.get(key);
     if (cached !== undefined) {
       this.requests.recordCacheHit();
@@ -381,18 +387,23 @@ export class LiveSpotifyClient implements SpotifyClient {
       endpoint,
       path: `/artists/${encodeURIComponent(id)}/albums`,
       query: { include_groups: INCLUDE_GROUPS[options.depth] },
-      maxItems: options.maxItems ?? DEFAULT_MAX_ITEMS,
+      maxItems,
       signal: options.signal,
       read: (body) => parseResponse(artistAlbumsPageSchema, body, endpoint).items.map(mapAlbum),
     });
 
     for (const album of albums) this.albumCache.set(album.id, album);
     this.artistAlbumsCache.set(key, albums);
-    this.rememberCatalogSize(id, albums.length);
+    if (albums.length < maxItems) this.rememberCatalogSize(id, albums.length);
     return albums;
   }
 
-  /** §3.5's weak obscurity proxy, learned by walking the discography rather than asked for. */
+  /**
+   * §3.5's weak obscurity proxy, learned by walking the discography rather than asked for —
+   * and only from a walk that reached the end of it. A discography cut off at the ceiling
+   * would make a prolific act look obscure, and the store now holds that for a session
+   * rather than for a request.
+   */
   private rememberCatalogSize(id: ArtistId, size: number): void {
     this.catalogSizeCache.set(id, size);
     const artist = this.artistCache.get(id);

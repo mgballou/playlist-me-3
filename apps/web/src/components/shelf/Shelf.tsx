@@ -43,7 +43,7 @@ type ShelfEntry = {
 };
 
 export function Shelf({ onClose }: ShelfProps) {
-  const { recipe, seed, locks, pool, setRecipe, resetTinkering } = useWorkbench();
+  const { recipe, seed, locks, rejects, pool, setRecipe, resetTinkering } = useWorkbench();
   const [entries, setEntries] = useState<readonly ShelfEntry[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -67,7 +67,7 @@ export function Shelf({ onClose }: ShelfProps) {
   };
 
   const share = (): void => {
-    const share = shareSearchParam({ recipe, seed, locks, poolStamp: poolStamp(pool) });
+    const share = shareSearchParam({ recipe, seed, locks, rejects, poolStamp: poolStamp(pool) });
     const url = `${window.location.origin}${window.location.pathname}?${share}`;
     void navigator.clipboard
       .writeText(url)
