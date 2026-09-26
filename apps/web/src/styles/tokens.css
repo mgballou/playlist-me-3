@@ -47,13 +47,17 @@
   --c-ground-light: oklch(86.4% 0.004 87);
 
   --c-ink-dark: oklch(91.1% 0.005 248);
-  --c-dim-dark: oklch(60.1% 0.013 252);
+  /* Was 60.1%, which cleared 4.5 on the ground and the well but not on the panels above
+   * them — 3.8 on raised, 3.3 on top — because elevation lightens the surface under the
+   * same ink. The least lightness that clears 4.5 on the top panel is 67.6%; 68% clears it
+   * (4.56) while sitting 23 points under --ink, so secondary still reads as secondary. */
+  --c-dim-dark: oklch(68% 0.013 252);
   --c-ink-light: oklch(21.8% 0.004 264);
-  /* Was 42%, which the old mid-grey ground demanded to clear AA. On the lifted ground that
-   * bought 5.6:1 — secondary text competing with primary, which is the opposite of muted.
-   * 45% is as much relief as the 4.5 body threshold allows: 49% looked right and measured
-   * 4.15, which is the reason this file is tested rather than eyeballed. */
-  --c-dim-light: oklch(45% 0.006 85);
+  /* Was 45% (42% before the ground lifted). Muted text also sits in wells — a pressed key
+   * is one — and the 79.5% well is the darkest ground it must read on: 45% bought 3.91
+   * there and 42% would have bought 4.45, both under AA. The most lightness that clears
+   * is 41.9%; 41.5% clears with room (4.57) and keeps 5.75 on the ground. */
+  --c-dim-light: oklch(41.5% 0.006 85);
 
   /* One colour means act, and it is red. The fill is dark enough to carry white type;
    * the bright variant is for indicators, which are never text. */
@@ -67,8 +71,11 @@
   --c-led-dark: oklch(75.8% 0.14 73);
   /* Lifting the light panels turned this brown. Amber on a pale ground is the awkward case —
    * dark enough to read is dark enough to look like mud — so the answer is chroma, not
-   * lightness: 0.15 at 62% reads as a lit meter where 0.12 at 58% read as a stain. */
-  --c-led-light: oklch(62% 0.15 68);
+   * lightness: 0.15 at 62% read as a lit meter where 0.12 at 58% read as a stain. But 0.15
+   * at hue 68 falls outside sRGB — the blue channel clamps below zero — and a clamped colour
+   * is not the one that was chosen. sRGB holds 0.136 chroma here; 0.13 keeps the meter just
+   * inside that edge. */
+  --c-led-light: oklch(62% 0.13 68);
 
   /* Source tones. An even ramp 110°→313°, ~29° apart. The arc dodges the red accent (25°)
    * by ≥45° and the amber LED (73°) by ≥37°, so a chip can be mistaken for neither the
@@ -82,11 +89,16 @@
   --c-src-playlist-dark: oklch(72% 0.14 284);
   --c-src-top-dark: oklch(72% 0.15 313);
 
-  --c-src-track-light: oklch(48% 0.13 110);
+  /* The light ramp is quieter than the dark one because sRGB is: at 48% lightness the edge
+   * swings almost 2:1 across these hues — green 139° holds 0.152 chroma where cyan 197°
+   * holds 0.082 (110° 0.105, 168° 0.097, 226° 0.092). The retuned values sit just under
+   * their own hue's edge — past it a browser clamps silently into a colour nobody chose,
+   * which is what the gamut scan catches. */
+  --c-src-track-light: oklch(48% 0.1 110);
   --c-src-new-light: oklch(48% 0.13 139);
-  --c-src-search-light: oklch(48% 0.11 168);
-  --c-src-library-light: oklch(48% 0.1 197);
-  --c-src-followed-light: oklch(48% 0.12 226);
+  --c-src-search-light: oklch(48% 0.09 168);
+  --c-src-library-light: oklch(48% 0.08 197);
+  --c-src-followed-light: oklch(48% 0.09 226);
   --c-src-artist-light: oklch(46% 0.15 255);
   --c-src-playlist-light: oklch(46% 0.16 284);
   --c-src-top-light: oklch(46% 0.17 313);
