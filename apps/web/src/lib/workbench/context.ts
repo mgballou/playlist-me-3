@@ -13,9 +13,22 @@
 
 import type { ArtistId, TrackId } from '@pm/core';
 import type { ListSlice, SpotifyClient } from '@pm/spotify';
-import { QuotaExceeded } from '@pm/spotify';
+import { PAGE_MAX_LIMIT, QuotaExceeded } from '@pm/spotify';
 
 import type { ContextPayload, ResolveRequest } from './resolve-request';
+
+/**
+ * How many pages one set may take. A set is read a page at a time, each page waiting on the
+ * one before, so this is a ceiling on how long a resolve waits for it — and every resolve
+ * waits again, because the client starts cold and the person is re-read on every resolve.
+ *
+ * Twenty is inside what one source already spends: the resolver reads its sources one
+ * request after another, an artist source at its album ceiling takes thirteen before its
+ * first genre lookup, and the lookups alone may take sixty. A list shorter than the ceiling
+ * ends early and costs what it always did, so only a person the old ceilings misread pays
+ * more. `docs/read-caps.md` has the measurement.
+ */
+const PAGES_PER_SET = 20;
 
 /**
  * Ceilings on what learning about the person costs. Familiarity is measured rather than
@@ -25,11 +38,20 @@ import type { ContextPayload, ResolveRequest } from './resolve-request';
  * because the interface prints the read beside them.
  */
 export const CONTEXT_LIMITS = {
-  savedTracks: 200,
+  /** Backs `inLibrary` and familiarity. A clipped read lets a saved track through. */
+  savedTracks: PAGES_PER_SET * PAGE_MAX_LIMIT,
+  /**
+   * Above Spotify's own ceiling, so it never binds: the endpoint serves fifty per range and
+   * answers the second page empty. That empty page is what lets the read call itself whole
+   * without trusting a `total`, and it is the only request this ceiling buys.
+   */
   topTracks: 100,
+  /** Spotify keeps fifty plays and no more. One request, and the ceiling is theirs, not ours. */
   recentlyPlayed: 50,
-  followedArtists: 50,
-  playlistTracks: 400,
+  /** Familiarity only, the weakest signal, but a clipped read misjudges every act past it. */
+  followedArtists: PAGES_PER_SET * PAGE_MAX_LIMIT,
+  /** Backs the headline exclusion. A clipped read puts blocked tracks on the deck. */
+  playlistTracks: PAGES_PER_SET * PAGE_MAX_LIMIT,
 } as const;
 
 /** A read that either came back or did not. Never an empty array standing in for both. */
@@ -66,11 +88,24 @@ export async function resolveContext(
   client: SpotifyClient,
   request: ResolveRequest,
 ): Promise<ContextPayload> {
-  const [saved, top, recent, followed] = await Promise.all([
+  // One wait, not two. Each set pages on its own, so a resolve waits on the longest of them.
+  // The blocked playlists used to start only once the four sets above had finished, which made
+  // the wait the slowest set plus the slowest playlist.
+  const [saved, top, recent, followed, playlists] = await Promise.all([
     attempt(async () => client.getSavedTracks({ maxItems: CONTEXT_LIMITS.savedTracks })),
     attempt(async () => client.getTopTracks('mediumTerm', { maxItems: CONTEXT_LIMITS.topTracks })),
     attempt(async () => client.getRecentlyPlayed({ maxItems: CONTEXT_LIMITS.recentlyPlayed })),
     attempt(async () => client.getFollowedArtists({ maxItems: CONTEXT_LIMITS.followedArtists })),
+    Promise.all(
+      request.excludedPlaylistIds.map(async (id) => {
+        const read = slice(
+          await attempt(async () =>
+            client.getPlaylistTracks(id, { maxItems: CONTEXT_LIMITS.playlistTracks }),
+          ),
+        );
+        return { playlistId: id, trackIds: idsOf(read), coverage: read.coverage };
+      }),
+    ),
   ]);
 
   const library = slice(saved);
@@ -78,17 +113,6 @@ export async function resolveContext(
   const recentlyHeard = slice(recent);
   const follows = slice(followed);
   const followedArtistIds: readonly ArtistId[] = follows.items.map((artist) => artist.id);
-
-  const playlists = await Promise.all(
-    request.excludedPlaylistIds.map(async (id) => {
-      const read = slice(
-        await attempt(async () =>
-          client.getPlaylistTracks(id, { maxItems: CONTEXT_LIMITS.playlistTracks }),
-        ),
-      );
-      return { playlistId: id, trackIds: idsOf(read), coverage: read.coverage };
-    }),
-  );
 
   return {
     libraryTrackIds: idsOf(library),

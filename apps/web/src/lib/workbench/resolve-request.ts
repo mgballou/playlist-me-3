@@ -14,9 +14,10 @@
  *   workbench compares. The shape, the two dials, and every exclusion that reads only the
  *   track itself are absent from it on purpose — moving a dial must be free.
  * - **The one exclusion that does cost** is `playlist`, because "never anything off Kids
- *   Jams" cannot be answered without knowing what is on Kids Jams. That is a fetch, once,
- *   the first time that playlist is named. There is no way to have it for free and pretending
- *   otherwise would just hide the cost.
+ *   Jams" cannot be answered without knowing what is on Kids Jams. That is a fetch when the
+ *   playlist is named, and again on every resolve after it, because nothing holds the read
+ *   between resolves. There is no way to have it for free and pretending otherwise would
+ *   just hide the cost.
  *
  * Tokens never appear in any of these types. Only resolved pool data crosses to the browser.
  */
