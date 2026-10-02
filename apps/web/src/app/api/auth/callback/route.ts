@@ -23,7 +23,7 @@ import {
   sessionCookieOptions,
 } from '@/lib/auth/cookies';
 import { statesMatch } from '@/lib/auth/pkce';
-import { sealSession, sessionFromGrant } from '@/lib/auth/session';
+import { newSessionId, sealSession, sessionFromGrant } from '@/lib/auth/session';
 import { exchangeCode } from '@/lib/auth/tokens';
 import { AuthHandoffFailed } from '@/lib/errors/auth';
 import { isSecureOrigin, readSpotifyEnv, redirectUriFor } from '@/lib/env';
@@ -61,8 +61,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return fail(AuthHandoffFailed.stateMismatch());
   }
 
-  if (request.nextUrl.searchParams.get('error') !== null) {
-    return fail(AuthHandoffFailed.deniedByUser());
+  // `access_denied` is the person saying no, and it is the only value that means that.
+  // Everything else Spotify sends here — an invalid client id, a redirect URI that does not
+  // match the registration — is a refusal of the request, and telling someone they declined
+  // a screen they never reached is a lie the bench would then repeat.
+  const refusal = request.nextUrl.searchParams.get('error');
+  if (refusal !== null) {
+    return fail(
+      refusal === 'access_denied'
+        ? AuthHandoffFailed.deniedByUser()
+        : AuthHandoffFailed.authorizeRefused(),
+    );
   }
 
   const code = request.nextUrl.searchParams.get('code');
@@ -79,7 +88,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   });
   if (!exchanged.ok) return fail(exchanged.error);
 
-  const session = sessionFromGrant({ grant: exchanged.value, nowMs: Date.now() });
+  const session = sessionFromGrant({
+    grant: exchanged.value,
+    nowMs: Date.now(),
+    sid: newSessionId(),
+  });
   if (session === null) return fail(AuthHandoffFailed.noRefreshToken());
 
   const sealed = await sealSession(session, reading.env.sessionSecret);

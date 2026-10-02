@@ -31,6 +31,18 @@ export type PlaylistChoice = {
   readonly trackCount: number;
 };
 
+/**
+ * A lookup's answer, and **where the answer came from**.
+ *
+ * `demoNotice` is the sentence to print when the rows are invented, and null when they came
+ * out of a person's own Spotify. It travels with the rows rather than being read from
+ * somewhere beside them, so a picker cannot list fixtures while implying it read a library —
+ * the rows and the provenance arrive in one value or not at all.
+ *
+ * It carries the words rather than a flag because the words are `@pm/spotify`'s own
+ * `DEMO_NOTICE`, and a client component may not import that package to reach them: doing so
+ * would pull the whole fake catalog and the live client into the browser bundle.
+ */
 export type CatalogLookup<T> =
-  | { readonly ok: true; readonly items: readonly T[] }
+  | { readonly ok: true; readonly items: readonly T[]; readonly demoNotice: string | null }
   | { readonly ok: false; readonly message: string };

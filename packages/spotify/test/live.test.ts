@@ -336,6 +336,28 @@ describe('caching', () => {
     expect(artist.catalogSize).toBe(2);
   });
 
+  it('does not answer a twelve-album read from a three-album one', async () => {
+    const test = harness((url) =>
+      url.includes('/artists/ar-101/albums')
+        ? { json: pagePayload([albumPayload(), albumPayload({ id: 'al-202' })]) }
+        : okArtist,
+    );
+    await test.client.getArtistAlbums(artistId('ar-101'), { depth: 'albums', maxItems: 2 });
+    await test.client.getArtistAlbums(artistId('ar-101'), { depth: 'albums', maxItems: 12 });
+    expect(test.calls).toHaveLength(2);
+  });
+
+  it('learns no catalog size from a walk that stopped at its ceiling', async () => {
+    const test = harness((url) =>
+      url.includes('/artists/ar-101/albums')
+        ? { json: pagePayload([albumPayload(), albumPayload({ id: 'al-202' })]) }
+        : okArtist,
+    );
+    await test.client.getArtistAlbums(artistId('ar-101'), { depth: 'albums', maxItems: 2 });
+    const artist = await test.client.getArtist(artistId('ar-101'));
+    expect(artist.catalogSize).toBe(0);
+  });
+
   it('reuses the cached album when fetching its tracks', async () => {
     const test = harness((url) =>
       url.includes('/tracks')

@@ -17,7 +17,7 @@
  * the easiest lie in the project (§12.1), so the result names the mode and offers no link.
  */
 
-import { format } from '@pm/core';
+import { format, unreachable } from '@pm/core';
 import { useState } from 'react';
 
 import { CoverArt } from '@/components/cover/CoverArt';
@@ -135,19 +135,78 @@ function SaveResult({
   readonly returnTo: string;
   readonly onClose: () => void;
 }) {
-  if (!outcome.ok) {
-    return (
-      <>
-        <ErrorNotice error={outcome.error} returnTo={returnTo} />
-        <div className="save__acts">
-          <button type="button" className="act--secondary" onClick={onClose}>
-            Back to the bench
-          </button>
-        </div>
-      </>
-    );
+  switch (outcome.kind) {
+    case 'failed':
+      return (
+        <>
+          <ErrorNotice error={outcome.error} returnTo={returnTo} />
+          <BackToBench onClose={onClose} />
+        </>
+      );
+    case 'partial':
+      return <PartialResult outcome={outcome} returnTo={returnTo} onClose={onClose} />;
+    case 'written':
+      return <WrittenResult outcome={outcome} onClose={onClose} />;
+    default:
+      return unreachable(outcome);
   }
+}
 
+/**
+ * **A save that stopped partway is not a failure and is not a success**, and saying either
+ * would be a lie about someone's Spotify account. So it says the count it reached, shows the
+ * reason it stopped in the same notice a total failure uses — which is what names the way
+ * out — and then offers the playlist itself, because it is there (§2.7: a terminal state
+ * names what happens next).
+ */
+function PartialResult({
+  outcome,
+  returnTo,
+  onClose,
+}: {
+  readonly outcome: Extract<SaveOutcome, { kind: 'partial' }>;
+  readonly returnTo: string;
+  readonly onClose: () => void;
+}) {
+  return (
+    <>
+      <p className="save__done">
+        {`${String(outcome.added)} of ${format({ kind: 'trackCount', count: outcome.requested })} written, in ${String(outcome.batches)} of ${String(outcome.batchesPlanned)} batch${outcome.batchesPlanned === 1 ? '' : 'es'}.`}
+      </p>
+
+      <ErrorNotice error={outcome.error} returnTo={returnTo} />
+
+      <p className="muted">
+        {outcome.mode === 'demo'
+          ? 'The half-written playlist is in the demo catalog, so nothing reached Spotify. Nothing was thrown away.'
+          : 'The playlist is on your Spotify account with the tracks it got. Nothing was thrown away.'}
+      </p>
+
+      <p className="muted">
+        Open it and add the rest by hand, or come back to the bench and save again — saving again
+        writes a second playlist, it does not fill this one in. The cover was not sent; it goes up
+        on a finished playlist.
+      </p>
+
+      <p className="numeric muted">{String(outcome.requests)} requests</p>
+
+      <div className="save__acts">
+        <OpenInSpotify url={outcome.url} />
+        <button type="button" className="act--quiet" onClick={onClose}>
+          Back to the bench
+        </button>
+      </div>
+    </>
+  );
+}
+
+function WrittenResult({
+  outcome,
+  onClose,
+}: {
+  readonly outcome: Extract<SaveOutcome, { kind: 'written' }>;
+  readonly onClose: () => void;
+}) {
   return (
     <>
       <p className="save__done">
@@ -165,16 +224,31 @@ function SaveResult({
       <p className="numeric muted">{String(outcome.requests)} requests</p>
 
       <div className="save__acts">
-        {outcome.url === null ? null : (
-          <a className="act--secondary" href={outcome.url} target="_blank" rel="noreferrer">
-            Open it in Spotify
-          </a>
-        )}
+        <OpenInSpotify url={outcome.url} />
         <button type="button" className="act--quiet" onClick={onClose}>
           Back to the bench
         </button>
       </div>
     </>
+  );
+}
+
+function OpenInSpotify({ url }: { readonly url: string | null }) {
+  if (url === null) return null;
+  return (
+    <a className="act--secondary" href={url} target="_blank" rel="noreferrer">
+      Open it in Spotify
+    </a>
+  );
+}
+
+function BackToBench({ onClose }: { readonly onClose: () => void }) {
+  return (
+    <div className="save__acts">
+      <button type="button" className="act--secondary" onClick={onClose}>
+        Back to the bench
+      </button>
+    </div>
   );
 }
 

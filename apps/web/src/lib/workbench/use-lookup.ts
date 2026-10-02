@@ -23,6 +23,8 @@ export type LookupState<T> = {
   readonly items: readonly T[];
   readonly looking: boolean;
   readonly message: string | null;
+  /** What the rows are, when they are invented. Held beside them so it cannot lag them. */
+  readonly demoNotice: string | null;
 };
 
 export type Lookup<T> = LookupState<T> & {
@@ -34,6 +36,7 @@ export function useLookup<T>(run: (query: string) => Promise<CatalogLookup<T>>):
   const [items, setItems] = useState<readonly T[]>([]);
   const [looking, setLooking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [demoNotice, setDemoNotice] = useState<string | null>(null);
 
   const latest = useRef(0);
   const runRef = useRef(run);
@@ -44,6 +47,7 @@ export function useLookup<T>(run: (query: string) => Promise<CatalogLookup<T>>):
       setItems([]);
       setLooking(false);
       setMessage(null);
+      setDemoNotice(null);
       return;
     }
 
@@ -57,9 +61,11 @@ export function useLookup<T>(run: (query: string) => Promise<CatalogLookup<T>>):
         if (outcome.ok) {
           setItems(outcome.items);
           setMessage(null);
+          setDemoNotice(outcome.demoNotice);
         } else {
           setItems([]);
           setMessage(outcome.message);
+          setDemoNotice(null);
         }
       });
     }, LOOKUP_DEBOUNCE_MS);
@@ -73,5 +79,5 @@ export function useLookup<T>(run: (query: string) => Promise<CatalogLookup<T>>):
     setQuery(next);
   }, []);
 
-  return { query, items, looking, message, setQuery: update };
+  return { query, items, looking, message, demoNotice, setQuery: update };
 }

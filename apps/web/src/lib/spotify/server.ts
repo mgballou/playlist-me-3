@@ -17,6 +17,7 @@ import type { Connection } from './connection';
 import { describeConnection } from './connection';
 import type { SpotifyHandle } from './factory';
 import { chooseClient } from './factory';
+import { sessionCaches } from './session-cache';
 
 async function readSession(secret: string): Promise<Session | null> {
   const sealed = (await cookies()).get(SESSION_COOKIE)?.value;
@@ -32,6 +33,9 @@ export async function getSpotifyHandle(): Promise<SpotifyHandle> {
   return chooseClient({
     reading,
     session,
+    // Process-wide and keyed by the session id, so the person is read once rather than on
+    // every server action. `./session-cache` says how long it is kept and why.
+    caches: sessionCaches,
     writeSession: async (refreshed) => {
       // Throws in a render, which `chooseClient` catches. In a server action it persists,
       // which is where refreshing actually matters. §5.3.1

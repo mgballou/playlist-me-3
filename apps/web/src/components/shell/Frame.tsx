@@ -30,10 +30,13 @@ import {
   type ReactNode,
 } from 'react';
 
+import { ErrorNotice } from '@/components/errors/ErrorNotice';
+import { useConnectionFailure } from '@/lib/errors/use-connection-failure';
 import { useCollapseAttribute } from '@/lib/layout/use-collapse';
 import { useSection } from '@/lib/layout/use-section';
 import { ownsGesture, swipeStep } from '@/lib/layout/swipe';
 import type { Connection } from '@/lib/spotify/connection';
+import { useReturnPath } from '@/lib/use-return-path';
 import { WorkbenchProvider } from '@/lib/workbench/use-workbench';
 import { Crown } from './Crown';
 import { Deck } from './Deck';
@@ -51,6 +54,8 @@ export type FrameProps = {
 function FrameBody({ connection, children }: FrameProps) {
   const collapsed = useCollapseAttribute();
   const { selected, scroll, select, step, press } = useSection();
+  const connectionFailure = useConnectionFailure();
+  const returnPath = useReturnPath();
 
   const stageRef = useRef<HTMLElement | null>(null);
   const gestureRef = useRef<{ readonly x: number; readonly y: number } | null>(null);
@@ -98,6 +103,15 @@ function FrameBody({ connection, children }: FrameProps) {
             }
           : {})}
       >
+        {/* How connecting failed belongs to no section — it is about the app rather than about
+            sources or shape — so it sits across the head of the stage and stays put when the
+            paged frame changes section (§7.1). Inside a panel it would vanish on a swipe. */}
+        {connectionFailure !== null ? (
+          <div className="stage__notice">
+            <ErrorNotice error={connectionFailure} returnTo={returnPath} />
+          </div>
+        ) : null}
+
         <Rack collapsed={collapsed} selected={selected} />
 
         <Panel section="deck" collapsed={collapsed} selected={selected === 'deck'}>

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { FakeCall } from '../src/index';
 import {
+  DEFAULT_RESOLVE_LIMITS,
   FakeSpotifyClient,
   KIDS_PLAYLIST_ID,
   QuotaExceeded,
@@ -405,6 +406,165 @@ describe('the report', () => {
     const sources: readonly Source[] = [{ kind: 'search', query: 'harbour', obscurity: 'any' }];
     const { report } = await resolveSources({ client, sources, limits: cheap });
     expect(report.sources[0]?.hitOffsetCeiling).toBe(false);
+  });
+});
+
+/**
+ * The one reproduction worth writing down: `the` matches 884 tracks in the demo catalog, and
+ * a ten-page budget of ten stopped at 100 of them with `hitOffsetCeiling`, `hitTrackLimit`
+ * and `empty` all false — a source that had read 100 of the 884 and said it was done. These
+ * pin both halves of the answer: the flag that admits it, and the budget that no longer
+ * needs it to be the only word.
+ */
+describe('a search that stops because it was told to', () => {
+  const wide: Source = { kind: 'search', query: 'the', obscurity: 'any' };
+
+  it('matches far more than one page budget can read', async () => {
+    const client = new FakeSpotifyClient();
+    let matches = 0;
+    let offset = 0;
+    for (;;) {
+      const page = await client.searchTracks({ terms: 'the', limit: 10, offset });
+      matches += page.items.length;
+      if (page.nextOffset === null) break;
+      offset = page.nextOffset;
+    }
+    expect(matches).toBe(884);
+  });
+
+  it('stopped at a hundred under the budget that shipped', async () => {
+    const client = new FakeSpotifyClient();
+    const { report } = await resolveSources({
+      client,
+      sources: [wide],
+      limits: { ...cheap, maxSearchPages: 10 },
+    });
+    expect(report.sources[0]?.contributed).toBe(100);
+  });
+
+  it('now says the page budget was what stopped it', async () => {
+    const client = new FakeSpotifyClient();
+    const { report } = await resolveSources({
+      client,
+      sources: [wide],
+      limits: { ...cheap, maxSearchPages: 10 },
+    });
+    expect(report.sources[0]?.hitPageLimit).toBe(true);
+  });
+
+  it('reaches its whole track budget under the budget that agrees', async () => {
+    const client = new FakeSpotifyClient();
+    const { report } = await resolveSources({ client, sources: [wide], limits: cheap });
+    expect(report.sources[0]?.contributed).toBe(DEFAULT_RESOLVE_LIMITS.maxTracksPerSource);
+  });
+
+  it('blames the track budget once the page budget is out of the way', async () => {
+    const client = new FakeSpotifyClient();
+    const { report } = await resolveSources({ client, sources: [wide], limits: cheap });
+    expect(report.sources[0]?.hitTrackLimit).toBe(true);
+  });
+
+  it('does not also blame the page budget', async () => {
+    const client = new FakeSpotifyClient();
+    const { report } = await resolveSources({ client, sources: [wide], limits: cheap });
+    expect(report.sources[0]?.hitPageLimit).toBe(false);
+  });
+
+  it('claims no page limit when it read every page there was', async () => {
+    const client = new FakeSpotifyClient();
+    const sources: readonly Source[] = [{ kind: 'search', query: 'harbour', obscurity: 'any' }];
+    const { report } = await resolveSources({ client, sources, limits: cheap });
+    expect(report.sources[0]?.hitPageLimit).toBe(false);
+  });
+
+  it('spends one request a page and no more', async () => {
+    const client = new FakeSpotifyClient();
+    const { report } = await resolveSources({ client, sources: [wide], limits: cheap });
+    expect(report.sources[0]?.requests).toBe(DEFAULT_RESOLVE_LIMITS.maxSearchPages);
+  });
+});
+
+describe('the search budget agrees with the track budget', () => {
+  it('reads exactly as many tracks as a source is allowed to keep', () => {
+    const reachable = DEFAULT_RESOLVE_LIMITS.maxSearchPages * DEFAULT_RESOLVE_LIMITS.searchPageSize;
+    expect(reachable).toBe(DEFAULT_RESOLVE_LIMITS.maxTracksPerSource);
+  });
+
+  it('never pages past the offset Spotify refuses', () => {
+    const lastOffset =
+      (DEFAULT_RESOLVE_LIMITS.maxSearchPages - 1) * DEFAULT_RESOLVE_LIMITS.searchPageSize;
+    expect(lastOffset).toBeLessThan(1000);
+  });
+});
+
+describe('an album search that stops because it was told to', () => {
+  const obscure: Source = { kind: 'search', query: '', obscurity: 'obscure' };
+
+  it('says when the album budget left albums unread', async () => {
+    const client = new FakeSpotifyClient();
+    const { report } = await resolveSources({
+      client,
+      sources: [{ kind: 'newReleases' }],
+      limits: { ...cheap, maxAlbumsPerSearch: 5 },
+    });
+    expect(report.sources[0]?.hitAlbumLimit).toBe(true);
+  });
+
+  it('says the same on an obscure search', async () => {
+    const client = new FakeSpotifyClient();
+    const { report } = await resolveSources({
+      client,
+      sources: [obscure],
+      limits: { ...cheap, maxAlbumsPerSearch: 5 },
+    });
+    expect(report.sources[0]?.hitAlbumLimit).toBe(true);
+  });
+
+  it('keeps only the albums the budget allowed', async () => {
+    const client = new FakeSpotifyClient();
+    await resolveSources({
+      client,
+      sources: [{ kind: 'newReleases' }],
+      limits: { ...cheap, maxAlbumsPerSearch: 5 },
+    });
+    expect(client.calls.filter((call) => call.method === 'getAlbumTracks')).toHaveLength(5);
+  });
+
+  it('blames the budget when the last page filled it exactly', async () => {
+    const client = new FakeSpotifyClient();
+    const { report } = await resolveSources({
+      client,
+      sources: [{ kind: 'newReleases' }],
+      limits: { ...cheap, maxAlbumsPerSearch: 10 },
+    });
+    expect(report.sources[0]?.hitAlbumLimit).toBe(true);
+  });
+
+  it('claims no album limit when it read every album it matched', async () => {
+    const client = new FakeSpotifyClient();
+    const { report } = await resolveSources({
+      client,
+      sources: [{ kind: 'newReleases' }],
+      limits: cheap,
+    });
+    expect(report.sources[0]?.hitAlbumLimit).toBe(false);
+  });
+
+  it('says when the page budget stopped the album search instead', async () => {
+    const client = new FakeSpotifyClient();
+    const { report } = await resolveSources({
+      client,
+      sources: [{ kind: 'newReleases' }],
+      limits: { ...cheap, maxSearchPages: 1, maxAlbumsPerSearch: 500 },
+    });
+    expect(report.sources[0]?.hitPageLimit).toBe(true);
+  });
+
+  it('reaches every new release the catalog has under the budget that agrees', async () => {
+    const client = new FakeSpotifyClient();
+    await resolveSources({ client, sources: [{ kind: 'newReleases' }], limits: cheap });
+    const wanted = demoCatalog.albums.filter((album) => album.isNew).length;
+    expect(client.calls.filter((call) => call.method === 'getAlbumTracks')).toHaveLength(wanted);
   });
 });
 

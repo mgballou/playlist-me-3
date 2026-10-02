@@ -6,12 +6,14 @@
  * `decodeRecipe`. One codec, one schema version, one thing to get right — and a recipe that
  * round-trips through a link round-trips through storage by construction.
  *
- * The place is a recipe **and a seed**. The seed is one number and it reproduces the build
- * exactly (spec §3.1), so someone mid-tune who reloads has lost nothing — not the recipe,
- * and not the deck they were looking at.
+ * The place is a recipe, a seed **and the tinkering**. The seed reproduces the build exactly
+ * (spec §3.1), but only over the same locks and the same rejects, because `build` takes both
+ * as inputs — so holding the seed alone held a different deck. All three travel, and someone
+ * mid-tune who reloads has lost nothing: not the recipe, and not the deck they were looking
+ * at. A place written before the tinkering travelled reads back with none of it.
  */
 
-import type { DecodeError, Lock, Recipe, RecipeId, Result, SharedDeck } from '@pm/core';
+import type { DecodeError, Lock, Recipe, RecipeId, Result, SharedDeck, TrackId } from '@pm/core';
 import {
   RECIPE_SCHEMA_VERSION,
   decodeRecipe,
@@ -19,6 +21,7 @@ import {
   encodeRecipe,
   encodeShare,
   recipeId,
+  trackId,
 } from '@pm/core';
 import { z } from 'zod';
 
@@ -50,7 +53,15 @@ export type SavedRecipe = {
 export type Place = {
   readonly encoded: string;
   readonly seed: number;
+  /** Slots the person pinned, and the tracks they banished. Both are build input. §3.3 */
+  readonly deck: PlaceDeck;
   readonly savedAt: number;
+};
+
+/** Plain JSON on the way out and branded ids on the way back, like every other stored id. */
+export type PlaceDeck = {
+  readonly locks: readonly Lock[];
+  readonly rejects: readonly TrackId[];
 };
 
 const savedSchema = z.object({
@@ -60,9 +71,15 @@ const savedSchema = z.object({
   savedAt: z.number().finite(),
 });
 
+const deckSchema = z.object({
+  locks: z.array(z.object({ index: z.number().int().nonnegative(), trackId: z.string().min(1) })),
+  rejects: z.array(z.string().min(1)),
+});
+
 const placeSchema = z.object({
   encoded: z.string().min(1),
   seed: z.number().finite(),
+  deck: deckSchema.optional(),
   savedAt: z.number().finite(),
 });
 
@@ -129,11 +146,14 @@ export async function savePlace(args: {
   readonly store: KeyValueStore;
   readonly recipe: Recipe;
   readonly seed: number;
+  readonly locks: readonly Lock[];
+  readonly rejects: ReadonlySet<TrackId>;
   readonly savedAt: number;
 }): Promise<void> {
   const place: Place = {
     encoded: encodeRecipe(args.recipe),
     seed: args.seed,
+    deck: { locks: args.locks, rejects: [...args.rejects] },
     savedAt: args.savedAt,
   };
   await args.store.write(PLACE_KEY, place);
@@ -142,14 +162,25 @@ export async function savePlace(args: {
 export type RestoredPlace = {
   readonly recipe: Recipe;
   readonly seed: number;
+  readonly locks: readonly Lock[];
+  readonly rejects: readonly TrackId[];
 };
+
+const NO_TINKERING: PlaceDeck = { locks: [], rejects: [] };
 
 /** Null when there is nothing to restore, or when what was there cannot be read. */
 export async function loadPlace(store: KeyValueStore): Promise<RestoredPlace | null> {
   const parsed = placeSchema.safeParse(await store.read(PLACE_KEY));
   if (!parsed.success) return null;
   const decoded = decodeRecipe(parsed.data.encoded);
-  return decoded.ok ? { recipe: decoded.value, seed: parsed.data.seed } : null;
+  if (!decoded.ok) return null;
+  const deck = parsed.data.deck ?? NO_TINKERING;
+  return {
+    recipe: decoded.value,
+    seed: parsed.data.seed,
+    locks: deck.locks.map((lock) => ({ index: lock.index, trackId: trackId(lock.trackId) })),
+    rejects: deck.rejects.map(trackId),
+  };
 }
 
 export async function forgetPlace(store: KeyValueStore): Promise<void> {
@@ -189,17 +220,20 @@ export function importRecipes(json: string): readonly SavedRecipe[] | null {
 }
 
 /**
- * A link carries the deck, not just the recipe: the seed and the locks travel with it, and
- * so does a stamp of the pool it was built from. Without the seed two loads of one link are
- * two different playlists; without the locks they diverge on the first re-roll.
+ * A link carries the deck, not just the recipe: the seed, the locks and the banished tracks
+ * travel with it, and so does a stamp of the pool it was built from. Without the seed two
+ * loads of one link are two different playlists; without the locks they diverge on the first
+ * re-roll; without the rejects they diverge on load, which is the case the stamp cannot
+ * catch — the pool is identical, so the app called a different deck exact.
  */
 export function shareSearchParam(share: {
   readonly recipe: Recipe;
   readonly seed: number;
   readonly locks: readonly Lock[];
+  readonly rejects: ReadonlySet<TrackId>;
   readonly poolStamp: string;
 }): string {
-  return `${RECIPE_URL_PARAM}=${encodeShare(share)}`;
+  return `${RECIPE_URL_PARAM}=${encodeShare({ ...share, rejects: [...share.rejects] })}`;
 }
 
 /** Null when the URL carries no recipe at all — which is not a failure, just the plain app. */

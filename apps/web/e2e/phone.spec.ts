@@ -326,3 +326,100 @@ test('pinch zoom is never taken away', async ({ page }) => {
   const viewport = await page.locator('meta[name="viewport"]').getAttribute('content');
   expect(viewport ?? '').not.toMatch(/user-scalable=no|maximum-scale=1/);
 });
+
+/**
+ * The shelf, with the deck scrolled. Screen 12 of the phone review, answered **covered**
+ * (`docs/review-answers-2026-09-01.md`): the ledger sat across the middle of the shelf panel
+ * and `Keep this recipe` could not be pressed at all.
+ *
+ * The cause was not the z-order — the ledger is above an overlay on purpose, because nothing
+ * may dim it (§7). It was that the document had a scrollbar §7.1 says it cannot have: the
+ * clipped `.slot__time` on each of twenty-five slots is absolutely positioned, so without a
+ * containing block on the stage it resolved against the viewport and pushed the root's scroll
+ * height a thousand pixels past a frame that is exactly `100dvh` tall. Moving focus into the
+ * shelf then scrolled the document and slid the pinned rails up over the panel.
+ *
+ * So the assertions are the two halves: the root never scrolls below the threshold, and the
+ * shelf's own first control can be pressed from the deck's foot.
+ */
+async function scrollDeckToFoot(page: Page) {
+  await key(page, 'Deck').click();
+
+  // The whole deck, not the first slots of it. `addFirstSource` waits on Re-roll, which
+  // enables as soon as the source lands — scrolling at that moment scrolls a list that is
+  // still growing, and the leak this guards needs the full twenty-five to reach past the
+  // frame's foot. The count is `DEFAULT_TRACK_COUNT`; the library pools far more than that.
+  await expect(page.locator('.slot')).toHaveCount(25, { timeout: 60_000 });
+
+  // Scrolled the way a thumb scrolls it — every scroller in the chain — rather than by
+  // setting `scrollTop` on the stage alone. The two are not the same here: the leaked boxes
+  // resolve against the viewport, so they do not move with the stage, and only the honest
+  // scroll leaves the root's scroll height where a person would find it.
+  await page.locator('#section-panel-deck .reveal__toggle').scrollIntoViewIfNeeded();
+  await expect
+    .poll(() => page.locator('.stage').evaluate((node) => node.scrollTop))
+    .toBeGreaterThan(0);
+}
+
+test('the document itself never scrolls below the threshold', async ({ page }) => {
+  await page.goto('/');
+  await addFirstSource(page);
+  await scrollDeckToFoot(page);
+
+  const root = await page.evaluate(() => ({
+    scrollHeight: document.documentElement.scrollHeight,
+    clientHeight: document.documentElement.clientHeight,
+  }));
+
+  expect(root.scrollHeight).toBeLessThanOrEqual(root.clientHeight);
+});
+
+test('the shelf opens clear of the rails with the deck at its foot', async ({ page }) => {
+  await page.goto('/');
+  await addFirstSource(page);
+  await scrollDeckToFoot(page);
+
+  await page.getByRole('button', { name: 'Shelf' }).click();
+  const keep = page.getByRole('button', { name: 'Keep this recipe' });
+  await expect(keep).toBeVisible();
+
+  // Visible is not the same as reachable: the ledger was painted over it and Playwright still
+  // called it visible. The question is what a tap at its own centre would actually land on.
+  const covered = await keep.evaluate((node) => {
+    const box = node.getBoundingClientRect();
+    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    return hit === null || !node.contains(hit);
+  });
+  expect(covered).toBe(false);
+});
+
+test('keeping a recipe from the deck’s foot puts it on the shelf', async ({ page }) => {
+  await page.goto('/');
+  await addFirstSource(page);
+  await scrollDeckToFoot(page);
+
+  await page.getByRole('button', { name: 'Shelf' }).click();
+  await page.getByRole('button', { name: 'Keep this recipe' }).click();
+
+  await expect(page.getByRole('button', { name: 'Load' })).toBeVisible();
+});
+
+/** The ledger stays above an overlay, because nothing may dim it (§7). This is not the fix. */
+test('the ledger still outranks an overlay', async ({ page }) => {
+  await page.goto('/');
+
+  const layers = await page.evaluate(() => {
+    const read = (selector: string) => {
+      const node = document.querySelector(selector);
+      return node === null ? null : getComputedStyle(node).getPropertyValue('z-index');
+    };
+    const probe = document.createElement('div');
+    probe.style.zIndex = 'var(--z-overlay)';
+    document.body.append(probe);
+    const overlay = getComputedStyle(probe).zIndex;
+    probe.remove();
+    return { ledger: read('.ledger'), overlay };
+  });
+
+  expect(Number(layers.ledger)).toBeGreaterThan(Number(layers.overlay));
+});

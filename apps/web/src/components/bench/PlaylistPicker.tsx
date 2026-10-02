@@ -23,6 +23,7 @@ import { useEffect, useState } from 'react';
 
 import { listMyPlaylists, lookupPlaylist } from '@/lib/actions/catalog';
 import type { PlaylistChoice } from '@/lib/workbench/catalog';
+import { DemoNotice } from '@/components/bench/DemoNotice';
 import { Overlay } from '@/components/primitives/Overlay';
 
 export type PlaylistPickerProps = {
@@ -36,12 +37,14 @@ export function PlaylistPicker({ title, onPick, onClose }: PlaylistPickerProps) 
   const [reference, setReference] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [looking, setLooking] = useState(false);
+  const [demoNotice, setDemoNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     void listMyPlaylists().then((listed) => {
       if (cancelled) return;
       setItems(listed.ok ? listed.items : []);
+      setDemoNotice(listed.ok ? listed.demoNotice : null);
       if (!listed.ok) setMessage(listed.message);
     });
     return () => {
@@ -69,6 +72,8 @@ export function PlaylistPicker({ title, onPick, onClose }: PlaylistPickerProps) 
 
   return (
     <Overlay title={title} onClose={onClose}>
+      <DemoNotice notice={demoNotice} />
+
       <p className="picker__note muted">
         Reading a playlist is the one thing here that costs a request. It is the only way to answer
         “never anything off this list”.

@@ -6,6 +6,7 @@ import type { TrackId } from '@pm/core';
 
 import { findTracks } from '@/lib/actions/catalog';
 import { useLookup } from '@/lib/workbench/use-lookup';
+import { DemoNotice } from '@/components/bench/DemoNotice';
 import { Overlay } from '@/components/primitives/Overlay';
 import { PickerResults } from './ArtistPicker';
 
@@ -20,6 +21,8 @@ export function TrackPicker({ title, onPick, onClose }: TrackPickerProps) {
 
   return (
     <Overlay title={title} onClose={onClose}>
+      <DemoNotice notice={lookup.demoNotice} />
+
       <label className="field">
         <span className="field__label label">Search for a track</span>
         <input

@@ -4,17 +4,31 @@
  *
  * Each reason carries the copy a person sees, because the alternative is a route handler
  * inventing wording at three different call sites.
+ *
+ * **The reasons are a closed set, and `AUTH_FAILURE_REASONS` is what makes that checkable.**
+ * A reason travels to the bench as `?auth=<reason>` and the bench has to decide what a value
+ * it does not know means — so the list is a value, not only a type, and `isAuthFailureReason`
+ * is the one place that decision is made. The messages below never reach a screen: they are
+ * what an `Error` carries, and the sentences a person reads live in `errors/connection.ts`.
  */
 
-export type AuthFailureReason =
-  | 'notConfigured'
-  | 'deniedByUser'
-  | 'stateMismatch'
-  | 'missingCode'
-  | 'refused'
-  | 'malformedGrant'
-  | 'unreachable'
-  | 'noRefreshToken';
+export const AUTH_FAILURE_REASONS = [
+  'notConfigured',
+  'deniedByUser',
+  'authorizeRefused',
+  'stateMismatch',
+  'missingCode',
+  'refused',
+  'malformedGrant',
+  'unreachable',
+  'noRefreshToken',
+] as const;
+
+export type AuthFailureReason = (typeof AUTH_FAILURE_REASONS)[number];
+
+export function isAuthFailureReason(value: string): value is AuthFailureReason {
+  return (AUTH_FAILURE_REASONS as readonly string[]).includes(value);
+}
 
 export class AuthHandoffFailed extends Error {
   readonly code = 'authHandoffFailed';
@@ -34,8 +48,21 @@ export class AuthHandoffFailed extends Error {
     );
   }
 
+  /** `error=access_denied`, and only that: the person saw the consent screen and said no. */
   static deniedByUser(): AuthHandoffFailed {
     return new AuthHandoffFailed('You did not give the app permission.', 'deniedByUser');
+  }
+
+  /**
+   * Any other `error=` Spotify sends back from the consent screen. It was folded into
+   * `deniedByUser` before this, which told people they had declined something they never saw
+   * — an invalid client id and a misregistered redirect URI both arrive this way.
+   */
+  static authorizeRefused(): AuthHandoffFailed {
+    return new AuthHandoffFailed(
+      'Spotify refused the authorization request, and not because it was declined.',
+      'authorizeRefused',
+    );
   }
 
   /** A mismatch aborts without exchanging the code. §5.3.1 */

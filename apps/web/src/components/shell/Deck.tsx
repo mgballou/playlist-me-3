@@ -58,6 +58,7 @@ export function Deck() {
     names,
     retryIn,
     reproduction,
+    resolveReport,
     reroll,
     lockTrack,
     unlockTrack,
@@ -181,7 +182,7 @@ export function Deck() {
             )}
 
             <Reveal label="Why these" hint="what each source gave, what each block took">
-              <BuildReport report={result.report} names={names} />
+              <BuildReport report={result.report} names={names} sources={resolveReport?.sources} />
             </Reveal>
           </>
         )}

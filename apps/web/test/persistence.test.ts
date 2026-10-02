@@ -1,4 +1,4 @@
-import type { Recipe } from '@pm/core';
+import type { Lock, Recipe, TrackId } from '@pm/core';
 import {
   artistId,
   clampDial,
@@ -130,6 +130,7 @@ describe('the shared link', () => {
     recipe: recipe(),
     seed: 4242,
     locks: [{ index: 2, trackId: trackId('tr-9') }],
+    rejects: new Set([trackId('tr-3'), trackId('tr-4')]),
     poolStamp: 'abc123',
   });
 
@@ -146,6 +147,14 @@ describe('the shared link', () => {
   it('carries the locks', () => {
     const decoded = shareFromSearch(`?${shareSearchParam(share())}`);
     expect(decoded?.ok === true ? decoded.value.locks : null).toEqual(share().locks);
+  });
+
+  it('carries the banished tracks', () => {
+    const decoded = shareFromSearch(`?${shareSearchParam(share())}`);
+    expect(decoded?.ok === true ? decoded.value.rejects : null).toEqual([
+      trackId('tr-3'),
+      trackId('tr-4'),
+    ]);
   });
 
   it('carries the stamp of the pool it was built from', () => {
@@ -169,25 +178,56 @@ describe('the shared link', () => {
 });
 
 describe('holding the place', () => {
+  const held = (overrides: { readonly locks?: readonly Lock[]; readonly rejects?: Set<TrackId> }) =>
+    ({
+      recipe: recipe(),
+      seed: 4242,
+      locks: overrides.locks ?? [],
+      rejects: overrides.rejects ?? new Set<TrackId>(),
+      savedAt: SAVED_AT,
+    }) as const;
+
   it('restores the recipe after a reload', async () => {
     const store = memoryStore();
-    await savePlace({ store, recipe: recipe(), seed: 4242, savedAt: SAVED_AT });
+    await savePlace({ store, ...held({}) });
     const place = await loadPlace(store);
     expect(place?.recipe.sources).toEqual(recipe().sources);
   });
 
   it('restores the seed, which is what reproduces the build exactly', async () => {
     const store = memoryStore();
-    await savePlace({ store, recipe: recipe(), seed: 4242, savedAt: SAVED_AT });
+    await savePlace({ store, ...held({}) });
     const place = await loadPlace(store);
     expect(place?.seed).toBe(4242);
   });
 
   it('restores the dials, so a mid-tune reload loses nothing', async () => {
     const store = memoryStore();
-    await savePlace({ store, recipe: recipe(), seed: 1, savedAt: SAVED_AT });
+    await savePlace({ store, ...held({}) });
     const place = await loadPlace(store);
     expect(place?.recipe.shape.depth).toBe(0.8);
+  });
+
+  it('restores the locks, which the seed alone does not reproduce', async () => {
+    const store = memoryStore();
+    const locks = [{ index: 2, trackId: trackId('tr-9') }];
+    await savePlace({ store, ...held({ locks }) });
+    const place = await loadPlace(store);
+    expect(place?.locks).toEqual(locks);
+  });
+
+  it('restores the banished tracks, which the seed alone does not reproduce', async () => {
+    const store = memoryStore();
+    await savePlace({ store, ...held({ rejects: new Set([trackId('tr-3')]) }) });
+    const place = await loadPlace(store);
+    expect(place?.rejects).toEqual([trackId('tr-3')]);
+  });
+
+  it('reads a place written before the tinkering travelled as having none', async () => {
+    const encoded = encodeRecipe(recipe());
+    const store = memoryStore(new Map([['place', { encoded, seed: 7, savedAt: 1 }]]));
+    const place = await loadPlace(store);
+    expect(place?.rejects).toEqual([]);
   });
 
   it('answers null when there is nothing held', async () => {

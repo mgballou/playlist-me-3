@@ -77,6 +77,33 @@ test('the recipe and its build survive a reload', async ({ page }) => {
   expect(await slotTitles(page).allInnerTexts()).toEqual(before);
 });
 
+/**
+ * The reload above reloads a deck nobody has touched, and a seed alone reproduces one of
+ * those. Locking and rejecting first is what makes the assertion mean anything: the
+ * tinkering is React state, and until it was written down a refresh threw it away.
+ */
+test('a lock and a reject survive a reload', async ({ page }) => {
+  await page.goto('/');
+  await addFirstSource(page);
+
+  const banished = await slotTitles(page).first().innerText();
+  await page.getByRole('button', { name: `Reject ${banished}` }).click();
+  await expect(slotTitles(page).filter({ hasText: banished })).toHaveCount(0);
+
+  await page.getByRole('button', { name: /^Lock .*, slot 1$|^Lock .* to slot 1$/ }).click();
+  const held = await slotTitles(page).first().innerText();
+  const before = await slotTitles(page).allInnerTexts();
+
+  await page.reload();
+  await expect(slotTitles(page).first()).toBeVisible({ timeout: 60_000 });
+
+  expect(await slotTitles(page).allInnerTexts()).toEqual(before);
+  await expect(slotTitles(page).filter({ hasText: banished })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Re-roll' }).click();
+  await expect(slotTitles(page).first()).toHaveText(held);
+});
+
 test('blocking a playlist is reachable and removes tracks', async ({ page }) => {
   await page.goto('/');
   await addFirstSource(page);

@@ -16,9 +16,31 @@
  * playlist; a save that threw away a written playlist because an image upload was refused
  * would be the worse outcome by a distance. So the cover is attempted last and reported
  * separately (§9: an expected absence is a state, not an error).
+ *
+ * **The tracks get the same care, and used not to.** Once the create call returns, a playlist
+ * exists on the account. A throw on batch two of three used to come back as `failed` with no
+ * id and no URL — the interface said the save had not happened over a playlist that had, and
+ * the person was left hunting for it. So a failed batch returns `partial`: the id, the link,
+ * how many tracks went in and how many batches of how many. The half-written playlist is not
+ * deleted, because it is theirs and they may want it.
+ *
+ * **The cover is not attempted after a failed batch.** It dresses a finished playlist, and
+ * the thing that stopped the tracks — a spent quota, an expired token — is the same thing
+ * that would refuse the image. Spending another request to find that out twice tells nobody
+ * anything.
+ *
+ * **The retry budget is the client's and is not doubled here.** `LiveSpotifyClient` already
+ * retries a rate-limited batch; what reaches this loop is a failure that survived it. A
+ * second retry loop at this level would burn the shared quota to say the same thing later.
+ *
+ * **One state this does not cover, honestly.** If `createPlaylist` times out *after* Spotify
+ * made the playlist, the id never comes back and there is nothing here to report — the app
+ * cannot name a playlist it was never told the id of. Reporting that would take a read-back
+ * of `/me/playlists` to find a playlist this save might have made, which is a guess about
+ * someone's account, not a report. It is a different state and it is left alone.
  */
 
-import type { TrackId } from '@pm/core';
+import type { PlaylistId, TrackId } from '@pm/core';
 import { ADD_ITEMS_MAX_URIS } from '@pm/spotify';
 
 import { toErrorSurface } from '../errors/surface';
@@ -35,48 +57,72 @@ function batches(trackIds: readonly TrackId[]): readonly (readonly TrackId[])[] 
   return out;
 }
 
+/** Demo mode's id names nothing on Spotify, so there is no link to offer. §12.1 */
+function linkTo(mode: 'live' | 'demo', playlistId: PlaylistId): string | null {
+  return mode === 'live' ? `${PLAYLIST_URL}${playlistId}` : null;
+}
+
 export async function savePlaylist(request: SaveRequest): Promise<SaveOutcome> {
   const handle = await getSpotifyHandle();
 
+  let playlistId: PlaylistId;
   try {
-    const playlistId = await handle.client.createPlaylist({
+    playlistId = await handle.client.createPlaylist({
       name: request.name,
       description: request.description,
       isPublic: request.isPublic,
     });
-
-    const chunks = batches(request.trackIds);
-    for (const chunk of chunks) {
-      await handle.client.addPlaylistTracks({ playlistId, trackIds: chunk });
-    }
-
-    let coverUploaded = false;
-    if (request.coverBase64 !== undefined && request.coverBase64.length > 0) {
-      try {
-        await handle.client.uploadPlaylistCover({
-          playlistId,
-          base64Jpeg: request.coverBase64,
-        });
-        coverUploaded = true;
-      } catch {
-        // The playlist is written. A missing cover is a state the interface names, not a
-        // reason to throw away work that already succeeded.
-      }
-    }
-
-    return {
-      ok: true,
-      playlistId,
-      // Demo mode's id names nothing on Spotify, so there is no link to offer. Offering one
-      // would be the interface claiming a write that did not happen. §12.1
-      url: handle.mode === 'live' ? `${PLAYLIST_URL}${playlistId}` : null,
-      added: request.trackIds.length,
-      batches: chunks.length,
-      coverUploaded,
-      mode: handle.mode,
-      requests: handle.client.requests.snapshot().total,
-    };
   } catch (cause) {
-    return { ok: false, error: toErrorSurface(cause) };
+    return { kind: 'failed', error: toErrorSurface(cause) };
   }
+
+  const chunks = batches(request.trackIds);
+  let added = 0;
+  let written = 0;
+
+  for (const chunk of chunks) {
+    try {
+      await handle.client.addPlaylistTracks({ playlistId, trackIds: chunk });
+    } catch (cause) {
+      return {
+        kind: 'partial',
+        playlistId,
+        url: linkTo(handle.mode, playlistId),
+        added,
+        requested: request.trackIds.length,
+        batches: written,
+        batchesPlanned: chunks.length,
+        error: toErrorSurface(cause),
+        mode: handle.mode,
+        requests: handle.client.requests.snapshot().total,
+      };
+    }
+    added += chunk.length;
+    written += 1;
+  }
+
+  let coverUploaded = false;
+  if (request.coverBase64 !== undefined && request.coverBase64.length > 0) {
+    try {
+      await handle.client.uploadPlaylistCover({
+        playlistId,
+        base64Jpeg: request.coverBase64,
+      });
+      coverUploaded = true;
+    } catch {
+      // The playlist is written. A missing cover is a state the interface names, not a
+      // reason to throw away work that already succeeded.
+    }
+  }
+
+  return {
+    kind: 'written',
+    playlistId,
+    url: linkTo(handle.mode, playlistId),
+    added: request.trackIds.length,
+    batches: chunks.length,
+    coverUploaded,
+    mode: handle.mode,
+    requests: handle.client.requests.snapshot().total,
+  };
 }

@@ -765,7 +765,13 @@ The app estimates two things (spec §3.5, §9). The interface says so, in these 
   measured.
 - **The live/remix filter says "best effort".** It misses and it over-catches.
 - **Demo mode announces itself** in the crown, permanently, and its data is visibly synthetic.
-  A person must never believe they are looking at real Spotify results.
+  A person must never believe they are looking at real Spotify results. The second half of that
+  is a claim about **every list of catalog rows**, not only about the crown: a phone review read
+  three fixtures in the playlist picker and could not tell them from a library
+  (`docs/review-answers-2026-09-01.md`, screen 5). An overlay puts a scrim over the crown while
+  it holds the attention, and a name ending "(demo)" reads as a name. So a picker prints the
+  notice over the rows, and prints nothing on a live catalog — the notice appearing is the
+  fact.
 - **Familiarity, by contrast, is exact** — it is set membership in the person's own library —
   and may be stated plainly.
 

@@ -17,6 +17,7 @@ const CONFIGURED = {
 const NOW = 1_770_000_000_000;
 
 const session: Session = {
+  sid: 'sid-1',
   accessToken: 'access-1',
   refreshToken: 'refresh-1',
   expiresAt: NOW + 3_600_000,
