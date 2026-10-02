@@ -42,6 +42,8 @@ export default tseslint.config(
     rules: {
       ...next.configs.recommended.rules,
       ...next.configs['core-web-vitals'].rules,
+      // This workspace uses only the App Router; the legacy pages rule cannot locate its routes.
+      '@next/next/no-html-link-for-pages': 'off',
     },
   },
 

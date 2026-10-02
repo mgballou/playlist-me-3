@@ -91,7 +91,7 @@ pnpm install
 pnpm dev            # http://localhost:3000
 ```
 
-Node 22 or newer.
+Node 22, the version used by CI.
 
 **It runs with no credentials.** With no Spotify app configured it starts in **demo mode**, backed
 by a synthetic catalog, and every feature works. That is deliberate: you should be able to clone
