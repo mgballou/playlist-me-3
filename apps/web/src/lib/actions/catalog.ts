@@ -37,10 +37,6 @@ import type {
 /** Two pages of ten is enough to name a thing without spending the budget on a picker. */
 const PICKER_PAGES = 2;
 
-function noticeFor(handle: SpotifyHandle): string | null {
-  return handle.mode === 'demo' ? DEMO_NOTICE : null;
-}
-
 /**
  * What the rows are, said with the rows. The honesty rules ask that demo fixtures say so,
  * and the crown saying it once is not enough on a phone: a review at 430px answered *is it

@@ -62,10 +62,7 @@ function ceilingOf(options: ListOptions | undefined): number | null {
   return options?.maxItems ?? null;
 }
 
-/**
- * A list shorter than the ceiling ended on its own, so it is the whole list. One exactly as
- * long as the ceiling may have been cut off, and is not kept.
- */
+/** Keep a capped read only when its coverage proves the list was read whole. */
 function isComplete<T>(slice: ListSlice<T>, ceiling: number | null): boolean {
   return ceiling !== null && slice.coverage.kind === 'whole';
 }
@@ -83,11 +80,11 @@ export class CachedSpotifyClient implements SpotifyClient {
 
   constructor(options: CachedSpotifyClientOptions) {
     this.inner = options.client;
-    this.savedTracks = options.caches<readonly CatalogTrack[]>('savedTracks');
-    this.topTracks = options.caches<readonly CatalogTrack[]>('topTracks');
-    this.recentlyPlayed = options.caches<readonly CatalogTrack[]>('recentlyPlayed');
-    this.followedArtists = options.caches<readonly Artist[]>('followedArtists');
-    this.playlistTracks = options.caches<readonly CatalogTrack[]>('playlistTracks');
+    this.savedTracks = options.caches<ListSlice<CatalogTrack>>('savedTracks');
+    this.topTracks = options.caches<ListSlice<CatalogTrack>>('topTracks');
+    this.recentlyPlayed = options.caches<ListSlice<CatalogTrack>>('recentlyPlayed');
+    this.followedArtists = options.caches<ListSlice<Artist>>('followedArtists');
+    this.playlistTracks = options.caches<ListSlice<CatalogTrack>>('playlistTracks');
     this.userPlaylists = options.caches<readonly PlaylistSummary[]>('userPlaylists');
     this.user = options.caches<SpotifyUser>('currentUser');
   }
@@ -169,12 +166,17 @@ export class CachedSpotifyClient implements SpotifyClient {
   }
 
   async getUserPlaylists(options?: ListOptions): Promise<readonly PlaylistSummary[]> {
-    return this.held({
-      cache: this.userPlaylists,
-      key: 'me',
-      ceiling: ceilingOf(options),
-      read: async () => this.inner.getUserPlaylists(options),
-    });
+    const ceiling = ceilingOf(options);
+    const key = `me:${ceiling === null ? 'all' : String(ceiling)}`;
+    const cached = this.userPlaylists.get(key);
+    if (cached !== undefined) {
+      this.inner.requests.recordCacheHit();
+      return cached;
+    }
+
+    const items = await this.inner.getUserPlaylists(options);
+    if (ceiling !== null && items.length < ceiling) this.userPlaylists.set(key, items);
+    return items;
   }
 
   /** No ceiling and no list: who the token belongs to does not change inside a session. */
