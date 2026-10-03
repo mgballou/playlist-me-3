@@ -52,18 +52,22 @@ export function BlockModule() {
       ) : (
         <>
           <ul className="rows">
-            {recipe.exclusions.map((exclusion, index) => (
-              <ExclusionRow
-                key={`${exclusion.kind}-${String(index)}`}
-                exclusion={exclusion}
-                index={index}
-                names={names}
-                removed={removals.find((entry) => entry.exclusionIndex === index)?.removed ?? null}
-                onRemove={() => {
-                  setRecipe(removeExclusion(recipe, index));
-                }}
-              />
-            ))}
+            {recipe.exclusions.map((exclusion, index) => {
+              const removal = removals.find((entry) => entry.exclusionIndex === index);
+              return (
+                <ExclusionRow
+                  key={`${exclusion.kind}-${String(index)}`}
+                  exclusion={exclusion}
+                  index={index}
+                  names={names}
+                  removed={removal?.removed ?? null}
+                  coverage={removal?.coverage ?? null}
+                  onRemove={() => {
+                    setRecipe(removeExclusion(recipe, index));
+                  }}
+                />
+              );
+            })}
           </ul>
 
           <div className="module__foot">

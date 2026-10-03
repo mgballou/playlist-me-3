@@ -224,35 +224,64 @@ describe('album search', () => {
 
 describe('the person', () => {
   it('returns a library', async () => {
-    const tracks = await client().getSavedTracks();
-    expect(tracks.length).toBeGreaterThan(0);
+    const { items } = await client().getSavedTracks();
+    expect(items.length).toBeGreaterThan(0);
   });
 
   it('honors a ceiling on the library', async () => {
-    const tracks = await client().getSavedTracks({ maxItems: 5 });
-    expect(tracks).toHaveLength(5);
+    const { items } = await client().getSavedTracks({ maxItems: 5 });
+    expect(items).toHaveLength(5);
   });
 
   it('returns different top tracks per range', async () => {
     const fake = client();
     const short = await fake.getTopTracks('shortTerm');
     const long = await fake.getTopTracks('longTerm');
-    expect(short[0]?.id).not.toBe(long[0]?.id);
+    expect(short.items[0]?.id).not.toBe(long.items[0]?.id);
   });
 
   it('returns followed artists', async () => {
-    const artists = await client().getFollowedArtists();
-    expect(artists.length).toBeGreaterThan(0);
+    const { items } = await client().getFollowedArtists();
+    expect(items.length).toBeGreaterThan(0);
   });
 
   it('returns recently played tracks', async () => {
-    const tracks = await client().getRecentlyPlayed();
-    expect(tracks.length).toBeGreaterThan(0);
+    const { items } = await client().getRecentlyPlayed();
+    expect(items.length).toBeGreaterThan(0);
   });
 
   it('returns the kids playlist the demo is built around', async () => {
-    const tracks = await client().getPlaylistTracks(KIDS_PLAYLIST_ID);
-    expect(tracks.length).toBeGreaterThanOrEqual(20);
+    const { items } = await client().getPlaylistTracks(KIDS_PLAYLIST_ID);
+    expect(items.length).toBeGreaterThanOrEqual(20);
+  });
+
+  it('says a library read to its ceiling was clipped, against its true length', async () => {
+    const { coverage } = await client().getSavedTracks({ maxItems: 5 });
+    expect(coverage.kind).toBe('clipped');
+  });
+
+  it('names the length it fell short of', async () => {
+    const fake = client();
+    const { coverage } = await fake.getSavedTracks({ maxItems: 5 });
+    const whole = await fake.getSavedTracks();
+    expect(coverage).toEqual({ kind: 'clipped', read: 5, total: whole.items.length });
+  });
+
+  it('calls an unbounded read whole', async () => {
+    const { items, coverage } = await client().getSavedTracks();
+    expect(coverage).toEqual({ kind: 'whole', read: items.length });
+  });
+
+  it('leaves a clipped read of recently played unmeasured, as Spotify does', async () => {
+    const { coverage } = await client().getRecentlyPlayed({ maxItems: 2 });
+    expect(coverage).toEqual({ kind: 'unmeasured', read: 2 });
+  });
+
+  it('says how long a playlist it stopped reading is', async () => {
+    const fake = client();
+    const { coverage } = await fake.getPlaylistTracks(KIDS_PLAYLIST_ID, { maxItems: 4 });
+    const whole = await fake.getPlaylistTracks(KIDS_PLAYLIST_ID);
+    expect(coverage).toEqual({ kind: 'clipped', read: 4, total: whole.items.length });
   });
 
   it('reports a playlist that does not exist', async () => {

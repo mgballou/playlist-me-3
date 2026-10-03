@@ -38,6 +38,7 @@ import type {
   ArtistAlbumsOptions,
   CoverUploadInput,
   CreatePlaylistInput,
+  ListSlice,
   ListOptions,
   PlaylistSummary,
   RequestCounter,
@@ -61,32 +62,29 @@ function ceilingOf(options: ListOptions | undefined): number | null {
   return options?.maxItems ?? null;
 }
 
-/**
- * A list shorter than the ceiling ended on its own, so it is the whole list. One exactly as
- * long as the ceiling may have been cut off, and is not kept.
- */
-function isComplete(items: readonly unknown[], ceiling: number | null): boolean {
-  return ceiling !== null && items.length < ceiling;
+/** Keep a capped read only when its coverage proves the list was read whole. */
+function isComplete<T>(slice: ListSlice<T>, ceiling: number | null): boolean {
+  return ceiling !== null && slice.coverage.kind === 'whole';
 }
 
 export class CachedSpotifyClient implements SpotifyClient {
   private readonly inner: SpotifyClient;
 
-  private readonly savedTracks: EntityCache<readonly CatalogTrack[]>;
-  private readonly topTracks: EntityCache<readonly CatalogTrack[]>;
-  private readonly recentlyPlayed: EntityCache<readonly CatalogTrack[]>;
-  private readonly followedArtists: EntityCache<readonly Artist[]>;
-  private readonly playlistTracks: EntityCache<readonly CatalogTrack[]>;
+  private readonly savedTracks: EntityCache<ListSlice<CatalogTrack>>;
+  private readonly topTracks: EntityCache<ListSlice<CatalogTrack>>;
+  private readonly recentlyPlayed: EntityCache<ListSlice<CatalogTrack>>;
+  private readonly followedArtists: EntityCache<ListSlice<Artist>>;
+  private readonly playlistTracks: EntityCache<ListSlice<CatalogTrack>>;
   private readonly userPlaylists: EntityCache<readonly PlaylistSummary[]>;
   private readonly user: EntityCache<SpotifyUser>;
 
   constructor(options: CachedSpotifyClientOptions) {
     this.inner = options.client;
-    this.savedTracks = options.caches<readonly CatalogTrack[]>('savedTracks');
-    this.topTracks = options.caches<readonly CatalogTrack[]>('topTracks');
-    this.recentlyPlayed = options.caches<readonly CatalogTrack[]>('recentlyPlayed');
-    this.followedArtists = options.caches<readonly Artist[]>('followedArtists');
-    this.playlistTracks = options.caches<readonly CatalogTrack[]>('playlistTracks');
+    this.savedTracks = options.caches<ListSlice<CatalogTrack>>('savedTracks');
+    this.topTracks = options.caches<ListSlice<CatalogTrack>>('topTracks');
+    this.recentlyPlayed = options.caches<ListSlice<CatalogTrack>>('recentlyPlayed');
+    this.followedArtists = options.caches<ListSlice<Artist>>('followedArtists');
+    this.playlistTracks = options.caches<ListSlice<CatalogTrack>>('playlistTracks');
     this.userPlaylists = options.caches<readonly PlaylistSummary[]>('userPlaylists');
     this.user = options.caches<SpotifyUser>('currentUser');
   }
@@ -101,11 +99,11 @@ export class CachedSpotifyClient implements SpotifyClient {
    * a thousand are different answers to the same question.
    */
   private async held<T>(args: {
-    readonly cache: EntityCache<readonly T[]>;
+    readonly cache: EntityCache<ListSlice<T>>;
     readonly key: string;
     readonly ceiling: number | null;
-    readonly read: () => Promise<readonly T[]>;
-  }): Promise<readonly T[]> {
+    readonly read: () => Promise<ListSlice<T>>;
+  }): Promise<ListSlice<T>> {
     const key = `${args.key}:${args.ceiling === null ? 'all' : String(args.ceiling)}`;
     const cached = args.cache.get(key);
     if (cached !== undefined) {
@@ -113,16 +111,16 @@ export class CachedSpotifyClient implements SpotifyClient {
       return cached;
     }
 
-    const items = await args.read();
-    if (isComplete(items, args.ceiling)) args.cache.set(key, items);
-    return items;
+    const slice = await args.read();
+    if (isComplete(slice, args.ceiling)) args.cache.set(key, slice);
+    return slice;
   }
 
   // -------------------------------------------------------------------------
   // The person — the reads this wrapper exists for
   // -------------------------------------------------------------------------
 
-  async getSavedTracks(options?: ListOptions): Promise<readonly CatalogTrack[]> {
+  async getSavedTracks(options?: ListOptions): Promise<ListSlice<CatalogTrack>> {
     return this.held({
       cache: this.savedTracks,
       key: 'me',
@@ -131,7 +129,7 @@ export class CachedSpotifyClient implements SpotifyClient {
     });
   }
 
-  async getTopTracks(range: TopRange, options?: ListOptions): Promise<readonly CatalogTrack[]> {
+  async getTopTracks(range: TopRange, options?: ListOptions): Promise<ListSlice<CatalogTrack>> {
     return this.held({
       cache: this.topTracks,
       key: range,
@@ -140,7 +138,7 @@ export class CachedSpotifyClient implements SpotifyClient {
     });
   }
 
-  async getRecentlyPlayed(options?: ListOptions): Promise<readonly CatalogTrack[]> {
+  async getRecentlyPlayed(options?: ListOptions): Promise<ListSlice<CatalogTrack>> {
     return this.held({
       cache: this.recentlyPlayed,
       key: 'me',
@@ -149,7 +147,7 @@ export class CachedSpotifyClient implements SpotifyClient {
     });
   }
 
-  async getFollowedArtists(options?: ListOptions): Promise<readonly Artist[]> {
+  async getFollowedArtists(options?: ListOptions): Promise<ListSlice<Artist>> {
     return this.held({
       cache: this.followedArtists,
       key: 'me',
@@ -158,7 +156,7 @@ export class CachedSpotifyClient implements SpotifyClient {
     });
   }
 
-  async getPlaylistTracks(id: PlaylistId, options?: ListOptions): Promise<readonly CatalogTrack[]> {
+  async getPlaylistTracks(id: PlaylistId, options?: ListOptions): Promise<ListSlice<CatalogTrack>> {
     return this.held({
       cache: this.playlistTracks,
       key: id,
@@ -168,12 +166,17 @@ export class CachedSpotifyClient implements SpotifyClient {
   }
 
   async getUserPlaylists(options?: ListOptions): Promise<readonly PlaylistSummary[]> {
-    return this.held({
-      cache: this.userPlaylists,
-      key: 'me',
-      ceiling: ceilingOf(options),
-      read: async () => this.inner.getUserPlaylists(options),
-    });
+    const ceiling = ceilingOf(options);
+    const key = `me:${ceiling === null ? 'all' : String(ceiling)}`;
+    const cached = this.userPlaylists.get(key);
+    if (cached !== undefined) {
+      this.inner.requests.recordCacheHit();
+      return cached;
+    }
+
+    const items = await this.inner.getUserPlaylists(options);
+    if (ceiling !== null && items.length < ceiling) this.userPlaylists.set(key, items);
+    return items;
   }
 
   /** No ceiling and no list: who the token belongs to does not change inside a session. */

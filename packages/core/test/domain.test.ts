@@ -23,6 +23,14 @@ describe('emptyContext', () => {
   it('knows no playlists', () => {
     expect(emptyContext().playlistTrackIds.size).toBe(0);
   });
+
+  it('calls its empty library whole rather than unread', () => {
+    expect(emptyContext().coverage.libraryTrackIds).toEqual({ kind: 'whole', read: 0 });
+  });
+
+  it('knows the coverage of no playlist at all', () => {
+    expect(emptyContext().coverage.playlistTrackIds.size).toBe(0);
+  });
 });
 
 describe('poolSize', () => {

@@ -25,8 +25,10 @@ export type {
   AlbumRef,
   Artist,
   ArtistRef,
+  ContextCoverage,
   EngineContext,
   Lock,
+  SetCoverage,
   Track,
   TrackPool,
 } from './domain';

@@ -11,7 +11,7 @@
  * component.
  */
 
-import type { DurationRange, Exclusion, ExclusionKind, YearRange } from '@pm/core';
+import type { DurationRange, Exclusion, ExclusionKind, SetCoverage, YearRange } from '@pm/core';
 import { format, unreachable } from '@pm/core';
 
 /** What the exclusion needs before it can be added. */
@@ -139,6 +139,37 @@ export const EXCLUSION_ORDER: readonly ExclusionKind[] = [
 
 export function exclusionDefinition(kind: ExclusionKind): ExclusionDefinition {
   return EXCLUSION_DEFINITIONS[kind];
+}
+
+/**
+ * What a block did not see, said on the block. Null when it saw everything, because §12 asks
+ * that a state meaning *nothing to report* render nothing at all.
+ *
+ * This is the sentence the app was missing. An exclusion answers *never anything off Kids
+ * Jams* by reading Kids Jams, that read stops at a ceiling, and every id past the ceiling is
+ * permitted — so a block that removed four hundred of a nine hundred track list was reporting
+ * a clean pass over five hundred tracks it had never heard of. The count alone cannot say
+ * that; only the count beside the length of the list can.
+ */
+export function describeCoverage(coverage: SetCoverage): string | null {
+  switch (coverage.kind) {
+    case 'whole':
+      return null;
+    case 'clipped':
+      return `Read ${String(coverage.read)} of ${format({
+        kind: 'trackCount',
+        count: coverage.total,
+      })}. Anything past that is not blocked.`;
+    case 'unmeasured':
+      return `Read ${format({
+        kind: 'trackCount',
+        count: coverage.read,
+      })} and stopped. Nothing says how long the list is, so anything past that is not blocked.`;
+    case 'unread':
+      return 'This list could not be read, so nothing was blocked. That is a failed request, not an empty list.';
+    default:
+      return unreachable(coverage);
+  }
 }
 
 /** What the bench shows on an exclusion row: the subject, where there is one. */

@@ -6,7 +6,7 @@
  * plain sets, so the pass does no I/O (§3.1).
  */
 
-import type { EngineContext, Track } from './domain';
+import type { EngineContext, SetCoverage, Track } from './domain';
 import { unreachable } from './errors';
 import type { Exclusion, ExclusionKind } from './recipe';
 
@@ -75,6 +75,15 @@ export type ExclusionRemoval = {
   /** Position in `Recipe.exclusions`, so the UI can point at the control that did it. */
   readonly exclusionIndex: number;
   readonly removed: number;
+  /**
+   * How much of the set this exclusion consulted the app actually holds, or null for an
+   * exclusion that reads the track and nothing else.
+   *
+   * Without this the count above is unreadable. "Kids Jams — 400 removed" over a list of
+   * nine hundred is not the feature working, it is the feature stopping, and the two look
+   * identical in a number.
+   */
+  readonly coverage: SetCoverage | null;
 };
 
 /**
@@ -126,6 +135,33 @@ export function isExcluded(track: Track, exclusion: Exclusion, context: EngineCo
   }
 }
 
+/**
+ * The set this one exclusion reads, and how much of it the app holds. Null where the
+ * exclusion reads only the track, which cannot be clipped and needs no caveat.
+ *
+ * A playlist absent from the map was never read — the exclusion names a list nobody
+ * fetched — and `isExcluded` will permit every track on it. That is the case the whole
+ * type exists for, so it is `unread` rather than nothing.
+ */
+function coverageOf(exclusion: Exclusion, context: EngineContext): SetCoverage | null {
+  switch (exclusion.kind) {
+    case 'playlist':
+      return context.coverage.playlistTrackIds.get(exclusion.playlistId) ?? { kind: 'unread' };
+    case 'inLibrary':
+      return context.coverage.libraryTrackIds;
+    case 'heardRecently':
+      return context.coverage.recentlyHeardTrackIds;
+    case 'artist':
+    case 'years':
+    case 'duration':
+    case 'explicit':
+    case 'liveOrRemix':
+      return null;
+    default:
+      return unreachable(exclusion);
+  }
+}
+
 export function reject({ pool, exclusions, context }: RejectInput): RejectOutput {
   const removed = new Array<number>(exclusions.length).fill(0);
   const kept: Track[] = [];
@@ -143,6 +179,7 @@ export function reject({ pool, exclusions, context }: RejectInput): RejectOutput
     kind: exclusion.kind,
     exclusionIndex,
     removed: removed[exclusionIndex] ?? 0,
+    coverage: coverageOf(exclusion, context),
   }));
 
   return {
