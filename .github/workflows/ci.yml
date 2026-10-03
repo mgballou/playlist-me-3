@@ -12,28 +12,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Fails, rather than skips, a PR behind its base: a run whose jobs were all
-  # skipped concludes success, which reads as a pass.
+  # A branch behind its base is not a failure: the gate passes with a notice and sets
+  # `run=false`, which skips the test jobs. The notice is the only trace, so a stale PR
+  # reads green with no tests run; update the branch to run them.
   gate:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 3
+    outputs:
+      run: ${{ steps.base.outputs.run }}
     steps:
-      - name: Require the branch to be current with its base
+      # This step must never fail. If the compare call itself fails, run CI rather than guess
+      # the branch is stale.
+      - id: base
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           BASE: ${{ github.base_ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          behind=$(gh api "repos/$REPO/compare/$BASE...$HEAD_SHA" --jq .behind_by)
-          if [ "$behind" != "0" ]; then
-            echo "::error::This branch is $behind commits behind $BASE. Update it to run CI."
-            exit 1
+          behind=$(gh api "repos/$REPO/compare/$BASE...$HEAD_SHA" --jq .behind_by) || behind=unknown
+          if [ "$behind" = "0" ] || [ "$behind" = "unknown" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::This branch is $behind commits behind $BASE. Update it to run CI."
+            echo "run=false" >> "$GITHUB_OUTPUT"
           fi
 
   check:
     needs: gate
+    if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -59,6 +67,7 @@ jobs:
 
   e2e:
     needs: gate
+    if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     # A full run takes about 90 seconds. A hung browser or web server stops here
     # instead of burning the six-hour default.

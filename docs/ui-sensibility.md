@@ -457,8 +457,8 @@ Type rules:
 
 ### 6.1 The two families, decided
 
-Loaded through `next/font/google`, which self-hosts them at build time — so the app still has
-no external font request and §14's "nothing depends on a service being reachable" holds.
+Loaded through `next/font/local` from the files in `apps/web/src/fonts/` — so the app has no
+external font request, the build needs no network, and §14's "nothing depends on a service being reachable" holds.
 
 - **`--font-display`: IBM Plex Sans.** Drawn for technical and industrial contexts, which is
   exactly what a panel of labelled controls is. It is neutral without being anonymous — the
