@@ -1,8 +1,8 @@
 # Reviewing this app without clicking through it
 
-`docs/review-spec.json` drives laila's review harness. It captures twelve screens at phone
-width and asks one question about each. This file says how to run it and what you would
-otherwise get wrong.
+`docs/review-spec.json` lists twelve screens at phone width, each with a path, the actions
+that drive it, and one question to ask about it. This file says how to walk it and what you
+would otherwise get wrong.
 
 Everything below was run against `docs/review-spec.json` on 20 August 2026. Every path was
 walked, every status code recorded, every screen checked for what it actually rendered.
@@ -16,13 +16,10 @@ pnpm install
 cd apps/web && pnpm exec next dev -p 3100
 ```
 
-Then, from laila:
-
-```bash
-node scripts/review/capture.mjs \
-  ~/projects/playlist-me/docs/review-spec.json \
-  ~/shots/playlist-me
-```
+Then walk `screens` in order with Playwright at the spec's `viewport`: open `base_url` plus
+`path`, run each step in `actions` (`click`, `scroll_to`, `wait_for`, `wait_ms`), hide the
+selectors in `hide`, and screenshot. One page serves the whole run — see _Screen order
+matters_ below.
 
 **Port 3100, not 3000.** The spec's `base_url` says 3100 and the walk was verified there.
 `pnpm dev` uses 3000, and on this machine another project's dev server holds it —
