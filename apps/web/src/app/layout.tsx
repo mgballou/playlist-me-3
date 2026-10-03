@@ -1,7 +1,8 @@
 /**
- * The document. Two families, self-hosted at build time by `next/font/google` — so the app
- * makes no external font request and ui-sensibility §14's "nothing depends on a service being
- * reachable" holds (§6.1).
+ * The document. Two families, self-hosted from `src/fonts/` by `next/font/local` — so the app
+ * makes no external font request, the build needs no network, and ui-sensibility §14's
+ * "nothing depends on a service being reachable" holds (§6.1). A build that fetched the files
+ * from Google failed whenever that fetch did.
  *
  * The two scripts in the head run **before hydration**, which is the whole point of them:
  * they settle the theme and the collapse state on the first paint. Doing either in an effect
@@ -10,7 +11,7 @@
 
 import type { ReactNode } from 'react';
 import type { Metadata } from 'next';
-import { IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google';
+import localFont from 'next/font/local';
 
 import { COLLAPSE_INIT_SCRIPT } from '@/lib/layout/collapse';
 import { THEME_INIT_SCRIPT } from '@/lib/theme';
@@ -22,15 +23,17 @@ import '@/styles/globals.css';
  * IBM Plex Sans is drawn for technical and industrial contexts, which is what a panel of
  * labelled controls is.
  *
- * The weights are named because **Plex has no variable cut on Google Fonts** — omitting the
- * list is a build error, not a variable font. That has one consequence worth knowing before
- * it is mistaken for a bug: `--weight-bold` (650) and `--weight-black` (750) both round to the
- * 700 face, so they render identically. Four static faces is already more than this interface
- * needs; asking for all seven would download three nobody uses.
+ * The four weights are named one by one, as when Google served them, all from one variable
+ * file. `--weight-bold` (650) and `--weight-black` (750) both round to the 700 face, so they
+ * render identically. A single `'400 700'` range would render 650 as 650 and change the look.
  */
-const plexSans = IBM_Plex_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+const plexSans = localFont({
+  src: [
+    { path: '../fonts/IBMPlexSans-Variable-latin.woff2', weight: '400', style: 'normal' },
+    { path: '../fonts/IBMPlexSans-Variable-latin.woff2', weight: '500', style: 'normal' },
+    { path: '../fonts/IBMPlexSans-Variable-latin.woff2', weight: '600', style: 'normal' },
+    { path: '../fonts/IBMPlexSans-Variable-latin.woff2', weight: '700', style: 'normal' },
+  ],
   display: 'swap',
   variable: '--font-plex-sans',
 });
@@ -42,9 +45,12 @@ const plexSans = IBM_Plex_Sans({
  * above it share their skeleton. That is how panel silkscreen works, and it is why this pair
  * is not simply "a sans and a mono".
  */
-const plexMono = IBM_Plex_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
+const plexMono = localFont({
+  src: [
+    { path: '../fonts/IBMPlexMono-Regular-latin.woff2', weight: '400', style: 'normal' },
+    { path: '../fonts/IBMPlexMono-Medium-latin.woff2', weight: '500', style: 'normal' },
+    { path: '../fonts/IBMPlexMono-SemiBold-latin.woff2', weight: '600', style: 'normal' },
+  ],
   display: 'swap',
   variable: '--font-plex-mono',
 });

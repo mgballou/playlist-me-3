@@ -175,12 +175,12 @@ async function settle(page: Page) {
       page.evaluate(async () => {
         await document.fonts.ready;
         // The name is the assertion. `next/font` registers a metric-matched
-        // `IBM Plex Sans Fallback` beside the real face, and `fonts.ready` resolves happily
+        // `plexSans Fallback` beside the real face, and `fonts.ready` resolves happily
         // with only the fallback present — which is how the first phone capture went out in
         // the wrong typeface, photographing a truncated `SOURC…` that does not happen in Plex.
         const real = (family: string) =>
           [...document.fonts].some((face) => face.family === family && face.status === 'loaded');
-        return real('IBM Plex Sans') && real('IBM Plex Mono');
+        return real('plexSans') && real('plexMono');
       }),
     )
     .toBe(true);
