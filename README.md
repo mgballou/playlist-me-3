@@ -78,7 +78,7 @@ copy above was opaque, this is the decoder ring.
 | **Stamp**     | A fingerprint of the pool a deck was built from. What lets a link tell a reproduced deck from a rebuilt one.          | `poolStamp` — `core/src/domain.ts`      |
 | **Lock**      | A track pinned to a slot index. Resolved twice: for membership in `select`, for position after `order`.               | `Lock` — `core/src/domain.ts`           |
 | **Re-roll**   | The same `build` call with a new seed and the same locks. There is no second selection path.                          | `build` — `core/src/build.ts`           |
-| **Familiar**  | Whether a track is in your library, your top tracks or your recent plays. Set membership, so it is exact.             | `familiarityOf` — `core/src/score.ts`   |
+| **Familiar**  | Saved, a top track, recently played, or by an artist you follow. Exact up to 200 saves and 50 follows.                | `familiarityOf` — `core/src/score.ts`   |
 | **Depth**     | How deep into an artist's catalog a track sits. Estimated from track position, because `popularity` no longer exists. | `prominenceOf` — `core/src/score.ts`    |
 | **Report**    | Why the engine chose what it chose. Returned beside the result, never instead of it.                                  | `BuildReport` — `core/src/build.ts`     |
 
